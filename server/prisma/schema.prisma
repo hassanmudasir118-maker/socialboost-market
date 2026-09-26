@@ -1,0 +1,511 @@
+// SocialBoost Market — reference data model.
+// NOT used by the runtime (the app talks to Postgres directly via `pg`, in
+// src/db/index.js — see migrations/0001_init.sql for the actual applied
+// schema). Kept as an alternate, browsable schema representation; updated to
+// postgresql here so it doesn't contradict the real runtime database.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADVERTISER
+  CREATOR
+  ADMIN
+}
+
+enum Platform {
+  YOUTUBE
+  TIKTOK
+  INSTAGRAM
+  FACEBOOK
+  OTHER
+}
+
+enum CampaignStatus {
+  DRAFT
+  PENDING_PAYMENT
+  ACTIVE
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum DeliverableStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  DISPUTED
+}
+
+enum TransactionType {
+  CAMPAIGN_FUNDING
+  CREATOR_PAYOUT
+  WITHDRAWAL
+  REFUND
+  ADJUSTMENT
+}
+
+enum TransactionStatus {
+  HELD_IN_ESCROW
+  RELEASED
+  COMPLETED
+  PENDING
+  REJECTED
+  REFUNDED
+  FAILED
+}
+
+enum LedgerDirection {
+  CREDIT
+  DEBIT
+}
+
+enum LedgerReason {
+  CAMPAIGN_PAYOUT
+  CAMPAIGN_FUNDING_DEBIT
+  CAMPAIGN_REFUND
+  WITHDRAWAL_REQUEST
+  WITHDRAWAL_REJECTED_REFUND
+  DISPUTE_RESOLUTION
+  ADMIN_ADJUSTMENT
+  REFERRAL_BONUS
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+}
+
+enum DisputeRaisedBy {
+  ADVERTISER
+  CREATOR
+}
+
+enum DisputeResolution {
+  RELEASED_TO_CREATOR
+  REFUNDED_TO_ADVERTISER
+}
+
+// ---------------------------------------------------------------------------
+// Core identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  role          Role
+  suspended     Boolean  @default(false)
+  emailVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profile Profile?
+  wallet  Wallet?
+
+  socialAccounts       SocialAccount[]
+  campaigns            Campaign[]             @relation("AdvertiserCampaigns")
+  applications         CampaignApplication[]  @relation("CreatorApplications")
+  reviewsGiven         Review[]               @relation("ReviewsGiven")
+  reviewsReceived      Review[]               @relation("ReviewsReceived")
+  messagesSent         Message[]              @relation("MessagesSent")
+  notifications        Notification[]
+  transactions         Transaction[]
+  withdrawals          Withdrawal[]
+  disputesRaised       Dispute[]              @relation("DisputesRaised")
+  referralsGiven       Referral[]             @relation("ReferrerUser")
+  referralReceived     Referral?              @relation("ReferredUser")
+  auditLogsAsActor     AdminAuditLog[]
+  passwordResetTokens     PasswordResetToken[]     @relation("PasswordResetTokens")
+  emailVerificationTokens EmailVerificationToken[] @relation("EmailVerificationTokens")
+  sessions                UserSession[]            @relation("UserSessions")
+
+  @@index([role])
+  @@index([suspended])
+}
+
+model Profile {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName    String
+  username       String?  @unique
+  bio            String?
+  avatarUrl      String?
+  country        String?
+  languages      String? // JSON-encoded string array
+  categories     String? // JSON-encoded string array
+  referralCode   String?  @unique
+  verified       Boolean  @default(false)
+  ratingAvg      Float    @default(0)
+  ratingCount    Int      @default(0)
+  completedCampaigns Int  @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([country])
+  @@index([verified])
+}
+
+model SocialAccount {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform     Platform
+  handle       String
+  profileUrl   String
+  followers    Int      @default(0)
+  engagementRate Float  @default(0)
+  verifiedAt   DateTime? // set once OAuth/platform verification is wired up
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([platform])
+}
+
+// ---------------------------------------------------------------------------
+// Campaigns
+// ---------------------------------------------------------------------------
+
+model Campaign {
+  id                String         @id @default(cuid())
+  advertiserId      String
+  advertiser        User           @relation("AdvertiserCampaigns", fields: [advertiserId], references: [id])
+  name              String
+  platform          Platform
+  link              String
+  campaignType      String
+  requirements      String
+  budgetCents       Int // authoritative amount, always integer cents
+  commissionBps     Int // basis points (e.g. 1500 = 15.00%), snapshotted at funding time
+  durationValue     Int
+  durationUnit      String // "Days" | "Weeks"
+  audienceAgeMin    Int?
+  audienceAgeMax    Int?
+  audienceGender    String?
+  audienceLocations String? // JSON array
+  audienceInterests String? // JSON array
+  maxCreators       Int
+  status            CampaignStatus @default(DRAFT)
+  adminApproved     Boolean        @default(false)
+  promoCode         String?
+  startDate         DateTime?
+  endDate           DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  applications  CampaignApplication[]
+  transactions  Transaction[]
+  disputes      Dispute[]
+  auditLogs     AdminAuditLog[]
+
+  @@index([advertiserId])
+  @@index([status])
+  @@index([platform])
+}
+
+model CampaignApplication {
+  id             String             @id @default(cuid())
+  campaignId     String
+  campaign       Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creatorId      String
+  creator        User               @relation("CreatorApplications", fields: [creatorId], references: [id])
+  message        String
+  proposedRateCents Int
+  status         ApplicationStatus  @default(PENDING)
+  appliedAt      DateTime           @default(now())
+  decidedAt      DateTime?
+
+  deliverable  CampaignDeliverable?
+  reviews      Review[]
+  messages     Message[]
+  disputes     Dispute[]
+  transactions Transaction[]
+
+  @@unique([campaignId, creatorId])
+  @@index([campaignId])
+  @@index([creatorId])
+  @@index([status])
+}
+
+model CampaignDeliverable {
+  id            String             @id @default(cuid())
+  applicationId String             @unique
+  application   CampaignApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  postUrl       String?
+  videoUrl      String?
+  screenshotUrl String?
+  report        String?
+  status        DeliverableStatus  @default(SUBMITTED)
+  reviewNote    String?
+  submittedAt   DateTime           @default(now())
+  decidedAt     DateTime?
+  history       String // JSON-encoded array of {status, date, note?}
+
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Reviews / Messages / Notifications
+// ---------------------------------------------------------------------------
+
+model Review {
+  id            String   @id @default(cuid())
+  campaignId    String
+  campaign      Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  applicationId String
+  application   CampaignApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromUserId    String
+  fromUser      User     @relation("ReviewsGiven", fields: [fromUserId], references: [id])
+  toUserId      String
+  toUser        User     @relation("ReviewsReceived", fields: [toUserId], references: [id])
+  rating        Int // 1-5
+  text          String?
+  verified      Boolean  @default(true) // always true: only issuable on an approved deliverable
+  createdAt     DateTime @default(now())
+
+  @@unique([applicationId, fromUserId]) // one review per direction per application
+  @@index([toUserId])
+  @@index([campaignId])
+}
+
+model Message {
+  id            String              @id @default(cuid())
+  applicationId String
+  application   CampaignApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromUserId    String
+  fromUser      User                @relation("MessagesSent", fields: [fromUserId], references: [id])
+  text          String
+  createdAt     DateTime            @default(now())
+
+  @@index([applicationId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  icon      String
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+// ---------------------------------------------------------------------------
+// Money: Transactions (ledger of record for admin/reporting) + Wallet (balances)
+// ---------------------------------------------------------------------------
+
+model Transaction {
+  id                String            @id @default(cuid())
+  type              TransactionType
+  status            TransactionStatus
+  userId            String? // advertiser or creator this transaction is attributed to
+  user              User?             @relation(fields: [userId], references: [id])
+  campaignId        String?
+  campaign          Campaign?         @relation(fields: [campaignId], references: [id])
+  applicationId     String?
+  application       CampaignApplication? @relation(fields: [applicationId], references: [id])
+  amountCents       Int
+  platformFeeCents  Int      @default(0)
+  netCents          Int      @default(0) // amount the counterparty actually receives/pays
+  createdAt         DateTime @default(now())
+
+  withdrawal Withdrawal?
+
+  @@index([type])
+  @@index([status])
+  @@index([userId])
+  @@index([campaignId])
+}
+
+model Wallet {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balanceCents     Int      @default(0) // authoritative available balance
+  pendingCents     Int      @default(0) // reserved / not yet withdrawable
+  totalEarnedCents Int      @default(0)
+  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now())
+
+  ledger WalletLedger[]
+
+  @@index([userId])
+}
+
+// Append-only ledger — the source of truth for how a wallet balance was derived.
+// Wallet.balanceCents is a materialized cache recomputed from this ledger.
+model WalletLedger {
+  id          String          @id @default(cuid())
+  walletId    String
+  wallet      Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  direction   LedgerDirection
+  reason      LedgerReason
+  amountCents Int
+  balanceAfterCents Int
+  referenceType String? // "Transaction" | "Withdrawal" | "Dispute"
+  referenceId   String?
+  createdAt   DateTime        @default(now())
+
+  @@index([walletId])
+  @@index([reason])
+}
+
+model Withdrawal {
+  id              String           @id @default(cuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id])
+  transactionId   String           @unique
+  transaction     Transaction      @relation(fields: [transactionId], references: [id])
+  amountCents     Int
+  feeCents        Int
+  netCents        Int
+  status          WithdrawalStatus @default(PENDING)
+  requestedAt     DateTime         @default(now())
+  decidedAt       DateTime?
+  decidedByUserId String?
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Disputes / Referrals / Platform config / Audit
+// ---------------------------------------------------------------------------
+
+model Dispute {
+  id            String            @id @default(cuid())
+  campaignId    String
+  campaign      Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  applicationId String
+  application   CampaignApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  raisedByUserId String
+  raisedBy      User              @relation("DisputesRaised", fields: [raisedByUserId], references: [id])
+  raisedByRole  DisputeRaisedBy
+  reason        String
+  status        DisputeStatus     @default(OPEN)
+  resolution    DisputeResolution?
+  resolvedByUserId String?
+  resolvedAt    DateTime?
+  createdAt     DateTime          @default(now())
+
+  @@index([status])
+  @@index([campaignId])
+}
+
+model Referral {
+  id             String   @id @default(cuid())
+  referrerUserId String
+  referrerUser   User     @relation("ReferrerUser", fields: [referrerUserId], references: [id])
+  referredUserId String   @unique
+  referredUser   User     @relation("ReferredUser", fields: [referredUserId], references: [id])
+  createdAt      DateTime @default(now())
+
+  @@index([referrerUserId])
+}
+
+// Singleton row (id = "singleton") holding platform-wide configuration.
+model PlatformSettings {
+  id                     String   @id @default("singleton")
+  commissionBps          Int      @default(1500) // 15.00%
+  minWithdrawalCents     Int      @default(5000) // $50.00
+  maxWithdrawalCents     Int      @default(500000) // $5,000.00
+  processingFeeBps       Int      @default(250) // 2.50%
+  processingFeeFixedCents Int     @default(30) // $0.30
+  categories             String   @default("[]") // JSON array
+  platforms              String   @default("[]") // JSON array
+  updatedAt              DateTime @updatedAt
+}
+
+model PromoCode {
+  id               String   @id @default(cuid())
+  code             String   @unique
+  discountBps      Int
+  active           Boolean  @default(true)
+  uses             Int      @default(0)
+  createdAt        DateTime @default(now())
+}
+
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  actorRole  String?
+  action     String
+  targetType String?
+  targetId   String?
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+  details    String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("PasswordResetTokens", fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("EmailVerificationTokens", fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model UserSession {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash  String   @unique
+  userAgent         String?
+  ipAddress         String?
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
+  lastUsedAt        DateTime
+  revokedAt         DateTime?
+
+  @@index([userId])
+}

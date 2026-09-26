@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: socialboost
+      POSTGRES_PASSWORD: socialboost
+      POSTGRES_DB: socialboost_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - socialboost_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U socialboost -d socialboost_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgres://socialboost:socialboost@postgres:5432/socialboost_dev
+      JWT_SECRET: dev-only-change-me
+      CORS_ORIGIN: http://localhost:5173
+      APP_URL: http://localhost:4000
+      PAYMENT_PROVIDER: mock
+      PAYMENT_TEST_MODE: "true"
+      PAYMENT_SECRET_KEY: dev-only-change-me
+      PAYMENT_WEBHOOK_SECRET: dev-only-change-me
+      SOCIAL_TOKEN_ENCRYPTION_KEY: "2PSrEnrSVdId3PmK+0fEywpw9yM0S8anXCSFyaaxMuM="
+      FRONTEND_URL: http://localhost:5173
+    ports:
+      - "4000:4000"
+    command: sh -c "node src/db/migrate.js up && node src/db/seed.js && node src/server.js"
+
+volumes:
+  socialboost_pg_data:
