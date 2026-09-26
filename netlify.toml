@@ -1,0 +1,4 @@
+[build]
+  base = "."
+  publish = "web/dist"
+  command = "npm install --prefix web && npm run build --prefix web"
