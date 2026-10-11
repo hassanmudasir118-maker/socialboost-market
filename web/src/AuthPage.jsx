@@ -86,10 +86,6 @@ export default function AuthPage({ mode, onGo, onAuth, presetRole }) {
                   <h4>Creator</h4>
                   <p>Get paid collaborations</p>
                 </button>
-                <button type="button" className={`role-opt ${role === "ADMIN" ? "active" : ""}`} onClick={() => setRole("ADMIN")}>
-                  <h4>Admin</h4>
-                  <p>Demo — platform operations</p>
-                </button>
               </div>
             </div>
           )}

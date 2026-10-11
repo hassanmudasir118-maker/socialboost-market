@@ -2,14 +2,17 @@ const app = require("./app");
 
 function validateProductionConfig() {
   if (process.env.NODE_ENV !== "production") return;
-  const required = ["JWT_SECRET", "CORS_ORIGIN", "APP_URL", "PAYMENT_PROVIDER", "PAYMENT_SECRET_KEY", "PAYMENT_WEBHOOK_SECRET", "DATABASE_URL", "SOCIAL_TOKEN_ENCRYPTION_KEY"];
+  // Note: PAYMENT_PROVIDER/PAYMENT_SECRET_KEY/PAYMENT_WEBHOOK_SECRET are
+  // intentionally NOT required here. This deployment only accepts manual
+  // (human-confirmed) payments such as EasyPaisa — there is no Stripe/card
+  // gateway configured, and requiring those vars would stop the server from
+  // starting at all. If a real card gateway is added later, set
+  // PAYMENT_PROVIDER=stripe plus its keys and that code path will pick them
+  // up on its own; nothing here needs to change.
+  const required = ["JWT_SECRET", "CORS_ORIGIN", "APP_URL", "DATABASE_URL", "SOCIAL_TOKEN_ENCRYPTION_KEY"];
   const missing = required.filter((key) => !process.env[key] || /placeholder|change-me|dev-only/i.test(process.env[key]));
   if (missing.length) {
     console.error(`Production configuration incomplete. Missing/unsafe: ${missing.join(", ")}`);
-    process.exit(1);
-  }
-  if (process.env.PAYMENT_PROVIDER === "mock" || process.env.PAYMENT_TEST_MODE === "true") {
-    console.error("Production cannot start with mock/test payments enabled.");
     process.exit(1);
   }
   // Fails safely rather than silently falling back to SQLite or any other

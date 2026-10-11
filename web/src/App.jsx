@@ -7,6 +7,7 @@ import ResetPassword from "./ResetPassword";
 import VerifyEmail from "./VerifyEmail";
 import Dashboard from "./Dashboard";
 import HelpCenter from "./HelpCenter";
+import WhatsAppButton from "./WhatsAppButton";
 import "./styles.css";
 
 // Reads a token-carrying link the user landed on directly (e.g. from an
@@ -120,6 +121,7 @@ export default function App() {
         />
       )}
       {page !== "dashboard" && <Footer />}
+      <WhatsAppButton />
     </div>
   );
 }
