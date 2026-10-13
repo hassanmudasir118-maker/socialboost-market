@@ -46,8 +46,8 @@ function MarketplaceModule() {
         </div>
         <div className="field"><label>Category</label><select value={filters.category} onChange={setF("category")}><option value="">All</option>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></div>
         <div className="field"><label>Country</label><input type="text" placeholder="Any" value={filters.country} onChange={setF("country")} /></div>
-        <div className="field"><label>Min. budget ($)</label><input type="number" placeholder="Any" value={filters.minBudget} onChange={setF("minBudget")} /></div>
-        <div className="field"><label>Max. budget ($)</label><input type="number" placeholder="Any" value={filters.maxBudget} onChange={setF("maxBudget")} /></div>
+        <div className="field"><label>Min. budget (Rs)</label><input type="number" placeholder="Any" value={filters.minBudget} onChange={setF("minBudget")} /></div>
+        <div className="field"><label>Max. budget (Rs)</label><input type="number" placeholder="Any" value={filters.maxBudget} onChange={setF("maxBudget")} /></div>
         <div className="field">
           <label>Sort</label>
           <select value={filters.sort} onChange={setF("sort")}>

@@ -245,12 +245,12 @@ function SettingsModule() {
         {msg && <div className="auth-error" style={{ background: "var(--mint-dim)", borderColor: "#234436", color: "var(--mint)" }}>{msg}</div>}
         <div className="field"><label>Platform commission (%)</label><input type="number" value={s.commissionPercent} onChange={set("commissionPercent")} /></div>
         <div className="field-row">
-          <div className="field"><label>Min withdrawal ($)</label><input type="number" value={s.minWithdrawal} onChange={set("minWithdrawal")} /></div>
-          <div className="field"><label>Max withdrawal ($)</label><input type="number" value={s.maxWithdrawal} onChange={set("maxWithdrawal")} /></div>
+          <div className="field"><label>Min withdrawal (Rs)</label><input type="number" value={s.minWithdrawal} onChange={set("minWithdrawal")} /></div>
+          <div className="field"><label>Max withdrawal (Rs)</label><input type="number" value={s.maxWithdrawal} onChange={set("maxWithdrawal")} /></div>
         </div>
         <div className="field-row">
           <div className="field"><label>Processing fee (%)</label><input type="number" value={s.processingFeePercent} onChange={set("processingFeePercent")} /></div>
-          <div className="field"><label>Fixed processing fee ($)</label><input type="number" value={s.processingFeeFixed} onChange={set("processingFeeFixed")} /></div>
+          <div className="field"><label>Fixed processing fee (Rs)</label><input type="number" value={s.processingFeeFixed} onChange={set("processingFeeFixed")} /></div>
         </div>
         <button className="btn btn-primary" onClick={save}><Save size={15} /> Save settings</button>
       </div>

@@ -59,7 +59,7 @@ export function StatusBadge({ status }) {
 
 export function fmt(n) {
   const v = Number(n) || 0;
-  return `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `Rs ${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function initials(name) {

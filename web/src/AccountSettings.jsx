@@ -402,7 +402,7 @@ export default function AccountSettings({ session, onLogout, onSessionRefresh, s
             <>
               <div className="kpi-mini"><div className="v">{account.campaignHistory.totalApplications}</div><div className="l">Total applications</div></div>
               <div className="kpi-mini"><div className="v">{account.campaignHistory.completedCampaigns}</div><div className="l">Completed campaigns</div></div>
-              <div className="kpi-mini"><div className="v mono">${account.wallet.totalEarned.toFixed(2)}</div><div className="l">Verified earnings</div></div>
+              <div className="kpi-mini"><div className="v mono">Rs {account.wallet.totalEarned.toFixed(2)}</div><div className="l">Verified earnings</div></div>
             </>
           ) : (
             <>
