@@ -39,6 +39,11 @@ function serializeWithdrawal(w) {
     fee: centsToDollars(w.fee_cents),
     net: centsToDollars(w.net_cents),
     status: w.status,
+    payoutStatus: w.payout_status,
+    payoutMethod: w.payout_account_method,
+    payoutAccountName: w.payout_account_name,
+    payoutAccountNumber: w.payout_account_number,
+    payoutFailureReason: w.payout_failure_reason,
     requestedAt: w.requested_at,
     decidedAt: w.decided_at,
   };
@@ -61,7 +66,7 @@ const withdrawSchema = z.object({ amount: z.number().positive() });
 router.post("/withdrawals", requireAuth, validate(withdrawSchema), async (req, res) => {
   try {
     const { withdrawal } = await withdrawalService.requestWithdrawal({ userId: req.user.id, amountCents: dollarsToCents(req.body.amount) });
-    await auditService.log({ actorId: req.user.id, actorRole: req.user.role, action: "Requested withdrawal", targetType: "Withdrawal", targetId: withdrawal.id, details: `$${req.body.amount}` });
+    await auditService.log({ actorId: req.user.id, actorRole: req.user.role, action: "Requested withdrawal", targetType: "Withdrawal", targetId: withdrawal.id, details: `Rs ${req.body.amount}` });
     res.status(201).json({ withdrawal: serializeWithdrawal(withdrawal) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || "Failed to request withdrawal" });

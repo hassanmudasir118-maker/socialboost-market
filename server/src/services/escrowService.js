@@ -51,7 +51,7 @@ async function reserve(campaignId, amountCents) {
   return transaction(async () => {
     const row = await getOrCreateForUpdate(campaignId);
     if (available(row) < amountCents) {
-      throw httpError(400, `Insufficient escrow: available $${(available(row) / 100).toFixed(2)}, requested $${(amountCents / 100).toFixed(2)}`);
+      throw httpError(400, `Insufficient escrow: available Rs ${(available(row) / 100).toFixed(2)}, requested Rs ${(amountCents / 100).toFixed(2)}`);
     }
     await run("UPDATE campaign_escrow SET reserved_cents = reserved_cents + ?, updated_at = ? WHERE campaign_id = ?", [amountCents, nowIso(), campaignId]);
     return get("SELECT * FROM campaign_escrow WHERE campaign_id = ?", [campaignId]);

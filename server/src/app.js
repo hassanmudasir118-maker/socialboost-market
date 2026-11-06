@@ -18,6 +18,10 @@ const db = require("./db");
 
 const app = express();
 
+// Behind the host's reverse proxy every request otherwise looks like it comes
+// from the proxy's IP, so rate limits would count all users together.
+app.set("trust proxy", 1);
+
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN || "*", credentials: true }));
 

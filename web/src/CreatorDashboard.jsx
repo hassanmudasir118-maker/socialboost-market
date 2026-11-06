@@ -81,6 +81,17 @@ function MarketplaceModule() {
                     <div className="cm-sub">{c.advertiserName} · {c.category}</div>
                   </div>
                 </div>
+                {(c.accountName || c.contentUrl) && (
+                  <div style={{ margin: "10px 0", fontSize: 13.5 }}>
+                    {c.accountName && <div><span className="dim">Promote:</span> <strong>{c.accountName}</strong></div>}
+                    {c.contentUrl && (
+                      <a href={c.contentUrl} target="_blank" rel="noopener noreferrer" style={{ wordBreak: "break-all" }}>
+                        Open the video / profile link
+                      </a>
+                    )}
+                  </div>
+                )}
+                {c.requirements && <div className="row-sub" style={{ marginBottom: 8 }}>{c.requirements}</div>}
                 {c.requirementsList?.length > 0 && <div className="cm-tags">{c.requirementsList.slice(0, 3).map((r, i) => <span className="cm-tag" key={i}>{r}</span>)}</div>}
                 <div className="cm-stats">
                   <div className="cm-stat"><div className="v mono">{fmt(c.budgetPerCreator)}</div><div className="l">Per creator</div></div>
@@ -95,7 +106,7 @@ function MarketplaceModule() {
                 {applyingId === c.id && (
                   <div style={{ marginTop: 12 }}>
                     {error && <div className="auth-error">{error}</div>}
-                    <div className="field"><label>Your proposed rate (USD)</label><input type="number" min="1" value={form.proposedRate} onChange={(e) => setForm({ ...form, proposedRate: e.target.value })} /></div>
+                    <div className="field"><label>Your proposed rate (Rs)</label><input type="number" min="1" value={form.proposedRate} onChange={(e) => setForm({ ...form, proposedRate: e.target.value })} /></div>
                     <div className="field"><label>Estimated completion (days)</label><input type="number" min="1" value={form.estimatedCompletionDays} onChange={(e) => setForm({ ...form, estimatedCompletionDays: e.target.value })} /></div>
                     <div className="field"><label>Relevant experience</label><input type="text" value={form.relevantExperience} onChange={(e) => setForm({ ...form, relevantExperience: e.target.value })} /></div>
                     <div className="field"><label>Pitch message</label><textarea value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} /></div>
@@ -244,70 +255,98 @@ function CollabsModule() {
   );
 }
 
-function PayoutSetupCard() {
-  const [status, setStatus] = useState(null);
+// Every payout is sent by hand by an admin (EasyPaisa / JazzCash). A creator
+// just tells us which account to send their withdrawal money to.
+function PayoutSetupCard({ profile, onSaved }) {
+  const [method, setMethod] = useState(profile?.payoutMethod || "EASYPAISA");
+  const [name, setName] = useState(profile?.payoutAccountName || "");
+  const [number, setNumber] = useState(profile?.payoutAccountNumber || "");
+  const [editing, setEditing] = useState(!profile?.payoutAccountNumber);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const hasAccount = !!profile?.payoutAccountNumber;
 
-  const load = () => api.getPayoutStatus().then(setStatus).catch(() => setStatus({ connected: false, payoutsEnabled: false }));
-  useEffect(() => { load(); }, []);
-
-  const start = async () => {
-    setBusy(true);
+  const save = async () => {
     setError("");
+    if (!name.trim() || number.trim().length < 5) { setError("Enter the account holder name and the full account / mobile number."); return; }
+    setBusy(true);
     try {
-      const { url } = await api.beginPayoutOnboarding();
-      window.location.href = url; // full-page navigation to Stripe's hosted onboarding
+      await api.savePayoutAccount({ payoutMethod: method, payoutAccountName: name.trim(), payoutAccountNumber: number.trim() });
+      setEditing(false);
+      onSaved && onSaved();
     } catch (err) {
-      setError(err.message || "Could not start payout setup");
+      setError(err.message || "Could not save payout account");
+    } finally {
       setBusy(false);
     }
   };
 
-  if (!status) return null;
-  if (status.payoutsEnabled) {
+  if (!editing && hasAccount) {
     return (
-      <div className="divider-note" style={{ marginBottom: 16, color: "var(--mint)" }}>
-        <ShieldCheck size={14} /> Payouts are set up — withdrawals go straight to your bank via Stripe.
+      <div className="panel" style={{ marginBottom: 20 }}>
+        <div className="panel-body" style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+              <ShieldCheck size={16} style={{ color: "var(--mint)" }} /> Payout account set
+            </div>
+            <div className="row-sub" style={{ marginTop: 4 }}>
+              {profile.payoutMethod === "JAZZCASH" ? "JazzCash" : "EasyPaisa"} · {profile.payoutAccountName} · {profile.payoutAccountNumber}
+            </div>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>Change</button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="panel" style={{ marginBottom: 20 }}>
-      <div className="panel-body" style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
-            <Banknote size={16} /> {status.connected ? "Finish setting up payouts" : "Set up payouts"}
-          </div>
-          <div className="row-sub" style={{ marginTop: 4 }}>
-            {status.connected
-              ? "Your payout account needs a bit more information from Stripe before it can pay you."
-              : "Withdrawals can't be sent to your bank until you complete a quick, secure setup with Stripe."}
-          </div>
-          {error && (
-            <div className="field-hint" style={{ color: "var(--coral)", marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
-              <AlertTriangle size={12} /> {error}
-            </div>
-          )}
+      <div className="panel-body" style={{ padding: "16px 20px" }}>
+        <div style={{ fontSize: 15, fontWeight: 600, display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <Banknote size={16} /> Set up your payout account
         </div>
-        <button className="btn btn-primary btn-sm" disabled={busy} onClick={start}>
-          {busy ? "Redirecting…" : status.connected ? "Finish setup" : "Set up payouts"}
-        </button>
+        <div className="row-sub" style={{ marginBottom: 12 }}>
+          Add your EasyPaisa or JazzCash account. Admin approves each withdrawal and sends the money to this account by hand.
+        </div>
+        {error && (
+          <div className="field-hint" style={{ color: "var(--coral)", marginBottom: 8, display: "flex", alignItems: "center", gap: 4 }}>
+            <AlertTriangle size={12} /> {error}
+          </div>
+        )}
+        <div className="withdraw-form" style={{ alignItems: "flex-end" }}>
+          <div className="field">
+            <label>Method</label>
+            <select value={method} onChange={(e) => setMethod(e.target.value)}>
+              <option value="EASYPAISA">EasyPaisa</option>
+              <option value="JAZZCASH">JazzCash</option>
+            </select>
+          </div>
+          <div className="field"><label>Account holder name</label><input type="text" value={name} onChange={(e) => setName(e.target.value)} /></div>
+          <div className="field"><label>Account / mobile number</label><input type="text" inputMode="tel" value={number} onChange={(e) => setNumber(e.target.value)} /></div>
+          <button className="btn btn-primary btn-sm" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save"}</button>
+          {hasAccount && <button className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>Cancel</button>}
+        </div>
       </div>
     </div>
   );
 }
 
+const PAYOUT_STATUS_LABEL = { NOT_STARTED: "Not started", PROCESSING: "Processing", COMPLETED: "Paid", FAILED: "Failed" };
+const PAYOUT_STATUS_BADGE = { NOT_STARTED: "badge-gold", PROCESSING: "badge-gold", COMPLETED: "badge-mint", FAILED: "badge-red" };
+
 function EarningsModule() {
   const [wallet, setWallet] = useState(null);
   const [ledger, setLedger] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
+  const [profile, setProfile] = useState(null);
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
 
-  const load = async () => { const [w, wd] = await Promise.all([api.getWallet(), api.myWithdrawals()]); setWallet(w.wallet); setLedger(w.ledger); setWithdrawals(wd.withdrawals); };
+  const load = async () => {
+    const [w, wd, p] = await Promise.all([api.getWallet(), api.myWithdrawals(), api.myProfile()]);
+    setWallet(w.wallet); setLedger(w.ledger); setWithdrawals(wd.withdrawals); setProfile(p.profile);
+  };
   useEffect(() => { load(); }, []);
 
   const submit = async () => {
@@ -324,7 +363,7 @@ function EarningsModule() {
         <div className="stat-card"><div className="stat-val">{fmt(wallet.balance)}</div><div className="stat-lbl">Available balance</div></div>
         <div className="stat-card"><div className="stat-val">{fmt(wallet.totalEarned)}</div><div className="stat-lbl">Total earnings</div></div>
       </div>
-      <PayoutSetupCard />
+      <PayoutSetupCard profile={profile} onSaved={load} />
       <div className="withdraw-box">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 600 }}>Withdraw funds</div>
@@ -334,7 +373,7 @@ function EarningsModule() {
           <>
             {error && <div className="auth-error" style={{ marginTop: 14 }}>{error}</div>}
             <div className="withdraw-form">
-              <div className="field"><label>Amount (USD)</label><input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+              <div className="field"><label>Amount (Rs)</label><input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
               <button className="btn btn-primary btn-sm" onClick={submit}>Confirm</button>
               <button className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>Cancel</button>
             </div>
@@ -346,8 +385,22 @@ function EarningsModule() {
         <div className="panel-body">
           {withdrawals.length === 0 ? <div className="empty">No withdrawals yet.</div> : withdrawals.map((w) => (
             <div className="row" key={w.id}>
-              <div><div className="row-title">{fmt(w.amount)} withdrawal</div><div className="row-sub">Fee {fmt(w.fee)} · Net {fmt(w.net)}</div></div>
-              <span className={`badge ${w.status === "APPROVED" ? "badge-mint" : w.status === "REJECTED" ? "badge-red" : "badge-gold"}`}>{w.status}</span>
+              <div>
+                <div className="row-title">{fmt(w.amount)} withdrawal</div>
+                <div className="row-sub">Fee {fmt(w.fee)} · Net {fmt(w.net)}</div>
+                {w.status === "APPROVED" && w.payoutAccountNumber && (
+                  <div className="row-sub">
+                    {w.payoutMethod === "JAZZCASH" ? "JazzCash" : "EasyPaisa"} · {w.payoutAccountName} · {w.payoutAccountNumber}
+                    {w.payoutStatus === "FAILED" && w.payoutFailureReason ? ` · ${w.payoutFailureReason}` : ""}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                <span className={`badge ${w.status === "APPROVED" ? "badge-mint" : w.status === "REJECTED" ? "badge-red" : "badge-gold"}`}>{w.status}</span>
+                {w.status === "APPROVED" && (
+                  <span className={`badge ${PAYOUT_STATUS_BADGE[w.payoutStatus] || "badge-gold"}`}>{PAYOUT_STATUS_LABEL[w.payoutStatus] || w.payoutStatus}</span>
+                )}
+              </div>
             </div>
           ))}
         </div>

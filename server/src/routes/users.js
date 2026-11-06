@@ -25,6 +25,12 @@ function serializeProfile(p) {
     completedCampaigns: p.completed_campaigns,
   };
 }
+// Only ever returned to the profile's OWNER (never the public/marketplace
+// views): includes the private payout account used for withdrawals.
+function serializeOwnProfile(p) {
+  if (!p) return null;
+  return { ...serializeProfile(p), payoutMethod: p.payout_method, payoutAccountName: p.payout_account_name, payoutAccountNumber: p.payout_account_number };
+}
 function serializeSocial(s) {
   return {
     id: s.id,
@@ -54,7 +60,7 @@ function serializeSocial(s) {
 
 router.get("/me/profile", requireAuth, asyncHandler(async (req, res) => {
   const p = await get("SELECT * FROM profiles WHERE user_id = ?", [req.user.id]);
-  res.json({ profile: serializeProfile(p) });
+  res.json({ profile: serializeOwnProfile(p) });
 }));
 
 // Combined view for the Account Settings screen: identity + profile +
@@ -104,6 +110,9 @@ const updateProfileSchema = z.object({
   country: z.string().max(80).optional().nullable(),
   languages: z.array(z.string()).optional(),
   categories: z.array(z.string()).optional(),
+  payoutMethod: z.enum(["EASYPAISA", "JAZZCASH"]).optional(),
+  payoutAccountName: z.string().trim().min(1).max(120).optional(),
+  payoutAccountNumber: z.string().trim().min(5).max(40).optional(),
 });
 
 router.patch("/me/profile", requireAuth, validate(updateProfileSchema), asyncHandler(async (req, res) => {
@@ -115,14 +124,17 @@ router.patch("/me/profile", requireAuth, validate(updateProfileSchema), asyncHan
   await run(
     `UPDATE profiles SET display_name=COALESCE(?,display_name), username=COALESCE(?,username), bio=COALESCE(?,bio),
      avatar_url=COALESCE(?,avatar_url), country=COALESCE(?,country),
-     languages=COALESCE(?,languages), categories=COALESCE(?,categories), updated_at=? WHERE user_id=?`,
+     languages=COALESCE(?,languages), categories=COALESCE(?,categories),
+     payout_method=COALESCE(?,payout_method), payout_account_name=COALESCE(?,payout_account_name),
+     payout_account_number=COALESCE(?,payout_account_number), updated_at=? WHERE user_id=?`,
     [
       b.displayName ?? null, b.username ?? null, b.bio ?? null, b.avatarUrl ?? null, b.country ?? null,
       b.languages ? JSON.stringify(b.languages) : null, b.categories ? JSON.stringify(b.categories) : null,
+      b.payoutMethod ?? null, b.payoutAccountName ?? null, b.payoutAccountNumber ?? null,
       nowIso(), req.user.id,
     ]
   );
-  res.json({ profile: serializeProfile(await get("SELECT * FROM profiles WHERE user_id = ?", [req.user.id])) });
+  res.json({ profile: serializeOwnProfile(await get("SELECT * FROM profiles WHERE user_id = ?", [req.user.id])) });
 }));
 
 // Public profile — used by the advertiser-facing creator marketplace.
@@ -192,20 +204,27 @@ router.get("/creators", requireAuth, asyncHandler(async (req, res) => {
 
   const creators = await all(`SELECT u.id as user_id FROM users u WHERE u.role = 'CREATOR' AND u.suspended = 0`);
 
-  const results = (
-    await Promise.all(
-      creators.map(async (row) => {
-        const profile = await get("SELECT * FROM profiles WHERE user_id = ?", [row.user_id]);
-        const socialAccounts = await all("SELECT * FROM social_accounts WHERE user_id = ?", [row.user_id]);
-        // Prefer a verified OAuth follower_count over the self-reported
-        // `followers` number when both exist for the same row — advertisers
-        // browsing the marketplace should see real numbers first.
-        const totalFollowers = socialAccounts.reduce((s, a) => s + (a.follower_count ?? a.followers), 0);
-        const topEngagement = socialAccounts.length ? Math.max(...socialAccounts.map((a) => a.engagement_rate)) : 0;
-        return { userId: row.user_id, profile: serializeProfile(profile), socialAccounts: socialAccounts.map(serializeSocial), totalFollowers, topEngagement };
-      })
-    )
-  )
+  // 3 queries total instead of 2 per creator.
+  const ids = creators.map((c) => c.user_id);
+  const profileRows = ids.length ? await all("SELECT * FROM profiles WHERE user_id = ANY(?::text[])", [ids]) : [];
+  const socialRows = ids.length ? await all("SELECT * FROM social_accounts WHERE user_id = ANY(?::text[])", [ids]) : [];
+  const profileById = new Map(profileRows.map((p) => [p.user_id, p]));
+  const socialById = new Map();
+  for (const sa of socialRows) {
+    if (!socialById.has(sa.user_id)) socialById.set(sa.user_id, []);
+    socialById.get(sa.user_id).push(sa);
+  }
+
+  const results = creators
+    .map((row) => {
+      const profile = profileById.get(row.user_id) || null;
+      const socialAccounts = socialById.get(row.user_id) || [];
+      // Prefer a verified OAuth follower_count over the self-reported
+      // `followers` number when both exist for the same row.
+      const totalFollowers = socialAccounts.reduce((s, a) => s + (a.follower_count ?? a.followers), 0);
+      const topEngagement = socialAccounts.length ? Math.max(...socialAccounts.map((a) => a.engagement_rate)) : 0;
+      return { userId: row.user_id, profile: serializeProfile(profile), socialAccounts: socialAccounts.map(serializeSocial), totalFollowers, topEngagement };
+    })
     .filter((c) => c.socialAccounts.length > 0) // only show creators who've added at least one account
     .filter((c) => !platform || c.socialAccounts.some((a) => a.platform === platform))
     .filter((c) => !country || c.profile.country === country)

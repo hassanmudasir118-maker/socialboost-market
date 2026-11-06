@@ -110,12 +110,33 @@ function ManualPaymentsModule() {
   );
 }
 
+const PAYOUT_STATUS_LABEL = { NOT_STARTED: "Not started", PROCESSING: "Processing", COMPLETED: "Paid", FAILED: "Failed" };
+const PAYOUT_STATUS_BADGE = { NOT_STARTED: "badge-gold", PROCESSING: "badge-gold", COMPLETED: "badge-mint", FAILED: "badge-red" };
+
 function WithdrawalsModule() {
   const [rows, setRows] = useState([]);
+  const [busy, setBusy] = useState(false);
   const load = () => api.adminWithdrawals().then((r) => setRows(r.withdrawals));
   useEffect(() => { load(); }, []);
   const pending = rows.filter((w) => w.status === "PENDING");
-  const resolved = rows.filter((w) => w.status !== "PENDING");
+  const processing = rows.filter((w) => w.status === "APPROVED" && w.payoutStatus === "PROCESSING");
+  const resolved = rows.filter((w) => w.status !== "PENDING" && !(w.status === "APPROVED" && w.payoutStatus === "PROCESSING"));
+
+  const accountLine = (w) => w.payoutAccountNumber
+    ? `${w.payoutAccountMethod === "JAZZCASH" ? "JazzCash" : "EasyPaisa"} · ${w.payoutAccountName} · ${w.payoutAccountNumber}`
+    : "No payout account on file";
+
+  const act = async (fn) => {
+    setBusy(true);
+    try { await fn(); await load(); }
+    catch (err) { alert(err.message || "Something went wrong"); }
+    finally { setBusy(false); }
+  };
+  const markFailed = (id) => {
+    const reason = window.prompt("Why did this payout fail? (e.g. wrong account number)");
+    if (reason) act(() => api.adminMarkPayoutFailed(id, reason));
+  };
+
   return (
     <>
       <div className="panel" style={{ marginBottom: 20 }}>
@@ -123,10 +144,32 @@ function WithdrawalsModule() {
         <div className="panel-body">
           {pending.length === 0 ? <div className="empty">None pending.</div> : pending.map((w) => (
             <div className="row" key={w.id}>
-              <div><div className="row-title">{w.userEmail}</div><div className="row-sub">{fmt(w.amount)} requested · net {fmt(w.net)}</div></div>
+              <div>
+                <div className="row-title">{w.userEmail}</div>
+                <div className="row-sub">{fmt(w.amount)} requested · net {fmt(w.net)}</div>
+                <div className="row-sub">{accountLine(w)}</div>
+              </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn btn-sm btn-accept" onClick={async () => { await api.adminResolveWithdrawal(w.id, true); load(); }}>Approve</button>
-                <button className="btn btn-sm btn-reject" onClick={async () => { await api.adminResolveWithdrawal(w.id, false); load(); }}>Reject</button>
+                <button className="btn btn-sm btn-accept" disabled={busy} onClick={() => act(() => api.adminResolveWithdrawal(w.id, true))}>Approve</button>
+                <button className="btn btn-sm btn-reject" disabled={busy} onClick={() => act(() => api.adminResolveWithdrawal(w.id, false))}>Reject</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="panel" style={{ marginBottom: 20 }}>
+        <div className="panel-head"><h3>Approved: waiting for your payment</h3><span className="badge badge-gold">{processing.length}</span></div>
+        <div className="panel-body">
+          {processing.length === 0 ? <div className="empty">Nothing waiting.</div> : processing.map((w) => (
+            <div className="row" key={w.id}>
+              <div>
+                <div className="row-title">{w.userEmail}</div>
+                <div className="row-sub">Send {fmt(w.net)} yourself, then press "Mark as paid"</div>
+                <div className="row-sub">{accountLine(w)}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-sm btn-accept" disabled={busy} onClick={() => act(() => api.adminMarkPayoutCompleted(w.id))}>Mark as paid</button>
+                <button className="btn btn-sm btn-reject" disabled={busy} onClick={() => markFailed(w.id)}>Mark failed</button>
               </div>
             </div>
           ))}
@@ -136,8 +179,15 @@ function WithdrawalsModule() {
         <div className="panel-head"><h3>Resolved</h3></div>
         <div className="panel-body">{resolved.map((w) => (
           <div className="row" key={w.id}>
-            <div><div className="row-title">{w.userEmail}</div><div className="row-sub">{fmt(w.amount)}</div></div>
-            <span className={`badge ${w.status === "APPROVED" ? "badge-mint" : "badge-red"}`}>{w.status}</span>
+            <div>
+              <div className="row-title">{w.userEmail}</div>
+              <div className="row-sub">{fmt(w.amount)}</div>
+              {w.status === "APPROVED" && <div className="row-sub">{accountLine(w)}{w.payoutStatus === "FAILED" && w.payoutFailureReason ? ` · ${w.payoutFailureReason}` : ""}</div>}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+              <span className={`badge ${w.status === "APPROVED" ? "badge-mint" : "badge-red"}`}>{w.status}</span>
+              {w.status === "APPROVED" && <span className={`badge ${PAYOUT_STATUS_BADGE[w.payoutStatus] || "badge-gold"}`}>{PAYOUT_STATUS_LABEL[w.payoutStatus] || w.payoutStatus}</span>}
+            </div>
           </div>
         ))}</div>
       </div>

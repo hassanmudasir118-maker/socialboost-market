@@ -70,7 +70,7 @@ async function createCampaignCheckout({ campaignId, advertiserId, promoCode, ide
       ]
     );
 
-    await auditService.log({ actorId: advertiserId, actorRole: "ADVERTISER", action: "Payment initiated", targetType: "Payment", targetId: id, campaignId, details: `$${(campaign.budget_cents / 100).toFixed(2)} via ${provider.name}` });
+    await auditService.log({ actorId: advertiserId, actorRole: "ADVERTISER", action: "Payment initiated", targetType: "Payment", targetId: id, campaignId, details: `Rs ${(campaign.budget_cents / 100).toFixed(2)} via ${provider.name}` });
 
     return { payment: await get("SELECT * FROM payments WHERE id = ?", [id]), clientSecret: intent.clientSecret, alreadyExisted: false };
   });
@@ -188,7 +188,7 @@ async function handlePaymentSucceeded(payment) {
 
   const campaign = await statusService.transitionCampaign(payment.campaign_id, "FUNDED", { actorId: null, note: `Payment ${payment.id} succeeded (webhook)` });
   await notificationService.notify(payment.user_id, { icon: "payment", title: "Campaign funded", body: `"${campaign.title}" is funded and ready to publish.` });
-  await auditService.log({ actorId: null, actorRole: "SYSTEM", action: "Payment succeeded — escrow funded", targetType: "Payment", targetId: payment.id, campaignId: payment.campaign_id, details: `$${(payment.amount_cents / 100).toFixed(2)}` });
+  await auditService.log({ actorId: null, actorRole: "SYSTEM", action: "Payment succeeded — escrow funded", targetType: "Payment", targetId: payment.id, campaignId: payment.campaign_id, details: `Rs ${(payment.amount_cents / 100).toFixed(2)}` });
 }
 
 async function handlePaymentFailed(payment, reason) {
@@ -275,7 +275,7 @@ async function createManualCheckout({ campaignId, advertiserId, method, idempote
       [id, campaignId, advertiserId, campaign.budget_cents, CURRENCY, feeCents, creatorAllocationCents, TEST_MODE ? 1 : 0, idempotencyKey || null, method, ts, ts]
     );
 
-    await auditService.log({ actorId: advertiserId, actorRole: "ADVERTISER", action: "Manual payment initiated", targetType: "Payment", targetId: id, campaignId, details: `$${(campaign.budget_cents / 100).toFixed(2)} via ${method} (manual)` });
+    await auditService.log({ actorId: advertiserId, actorRole: "ADVERTISER", action: "Manual payment initiated", targetType: "Payment", targetId: id, campaignId, details: `Rs ${(campaign.budget_cents / 100).toFixed(2)} via ${method} (manual)` });
 
     return { payment: await get("SELECT * FROM payments WHERE id = ?", [id]), account, alreadyExisted: false };
   });
@@ -315,7 +315,7 @@ async function resolveManualPayment({ paymentId, adminId, confirm, reason }) {
       // Re-read so handlePaymentSucceeded sees the just-written manual_review_status.
       const updated = await get("SELECT * FROM payments WHERE id = ?", [paymentId]);
       await handlePaymentSucceeded(updated);
-      await auditService.log({ actorId: adminId, actorRole: "ADMIN", action: "Manual payment confirmed — escrow funded", targetType: "Payment", targetId: paymentId, campaignId: payment.campaign_id, details: `$${(payment.amount_cents / 100).toFixed(2)}` });
+      await auditService.log({ actorId: adminId, actorRole: "ADMIN", action: "Manual payment confirmed — escrow funded", targetType: "Payment", targetId: paymentId, campaignId: payment.campaign_id, details: `Rs ${(payment.amount_cents / 100).toFixed(2)}` });
     } else {
       await run("UPDATE payments SET status='FAILED', failure_reason=?, manual_review_status='REJECTED', manual_reviewed_by=?, manual_reviewed_at=?, updated_at=? WHERE id=?", [reason || "Manual payment not confirmed", adminId, ts, ts, paymentId]);
       await notificationService.notify(payment.user_id, { icon: "alert", title: "Payment not confirmed", body: reason || "We could not confirm your manual payment. Please contact support." });

@@ -99,9 +99,8 @@ export const api = {
   syncSocialAccount: (id) => request(`/social-accounts/${id}/sync`, { method: "POST" }),
   disconnectSocialAccount: (id) => request(`/social-accounts/${id}`, { method: "DELETE" }),
 
-  // Stripe Connect payout onboarding (creator wallet)
-  getPayoutStatus: () => request("/wallet/payouts/status"),
-  beginPayoutOnboarding: () => request("/wallet/payouts/onboarding", { method: "POST" }),
+  // Manual payout account (EasyPaisa/JazzCash): an admin sends the money by hand.
+  savePayoutAccount: (payload) => request("/users/me/profile", { method: "PATCH", body: payload }),
 
   listCreators: (filters = {}) => {
     const qs = new URLSearchParams(Object.entries(filters).filter(([, v]) => v !== "" && v != null)).toString();
@@ -178,7 +177,9 @@ export const api = {
   adminCampaigns: () => request("/admin/campaigns"),
   adminApproveCampaign: (id) => request(`/admin/campaigns/${id}/approve`, { method: "POST" }),
   adminWithdrawals: () => request("/admin/withdrawals"),
-  adminResolveWithdrawal: (id, approve) => request(`/admin/withdrawals/${id}/resolve`, { method: "POST", body: { approve } }),
+  adminResolveWithdrawal: (id, approve) => request(`/admin/withdrawals/${id}/resolve`, { method: "POST", body: { approve, payoutMethod: "MANUAL" } }),
+  adminMarkPayoutCompleted: (id) => request(`/admin/withdrawals/${id}/payout-completed`, { method: "POST" }),
+  adminMarkPayoutFailed: (id, reason) => request(`/admin/withdrawals/${id}/payout-failed`, { method: "POST", body: { reason } }),
   adminDisputes: () => request("/admin/disputes"),
   adminResolveDispute: (id, resolution) => request(`/admin/disputes/${id}/resolve`, { method: "POST", body: { resolution } }),
   adminTransactions: () => request("/admin/transactions"),

@@ -16,6 +16,13 @@ async function requestWithdrawal({ userId, amountCents }) {
     const w = await wallet.getOrCreateWallet(userId);
     if (w.balance_cents < amountCents) throw httpError(400, "Amount exceeds available balance");
 
+    // Every payout is sent by hand by an admin (EasyPaisa / JazzCash), so the
+    // creator must have told us which account to pay into first.
+    const profile = await get("SELECT payout_method, payout_account_name, payout_account_number FROM profiles WHERE user_id = ?", [userId]);
+    if (!profile || !profile.payout_method || !profile.payout_account_number) {
+      throw httpError(400, "Add your EasyPaisa or JazzCash payout account in Earnings before requesting a withdrawal");
+    }
+
     const feeCents = applyBps(amountCents, settings.processing_fee_bps) + settings.processing_fee_fixed_cents;
     const netCents = amountCents - feeCents;
     const ts = nowIso();
@@ -31,9 +38,10 @@ async function requestWithdrawal({ userId, amountCents }) {
 
     const wdId = newId("wdr");
     await run(
-      `INSERT INTO withdrawals (id, user_id, transaction_id, amount_cents, fee_cents, net_cents, status, payout_status, requested_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 'NOT_STARTED', ?)`,
-      [wdId, userId, txnId, amountCents, feeCents, netCents, ts]
+      `INSERT INTO withdrawals (id, user_id, transaction_id, amount_cents, fee_cents, net_cents, status, payout_status,
+         payout_account_method, payout_account_name, payout_account_number, requested_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 'NOT_STARTED', ?, ?, ?, ?)`,
+      [wdId, userId, txnId, amountCents, feeCents, netCents, profile.payout_method, profile.payout_account_name, profile.payout_account_number, ts]
     );
 
     return {

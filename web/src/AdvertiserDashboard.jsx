@@ -7,57 +7,77 @@ import {
 import { api } from "./api";
 import { PLATFORM_ICONS, PLATFORM_LABELS, PLATFORM_COLORS, StatusBadge, fmt, fmtDate, initials } from "./shared";
 
-const CAMPAIGN_TYPES = [
-  { key: "sponsored_post", label: "Sponsored post" },
-  { key: "dedicated_video", label: "Dedicated video" },
-  { key: "shoutout", label: "Shoutout / mention" },
-  { key: "story_feature", label: "Story feature" },
-  { key: "product_review", label: "Product review" },
-  { key: "brand_ambassador", label: "Brand ambassadorship" },
+// Simple goals. (Old campaigns may use other types; those are kept as they are.)
+const GOALS = [
+  { key: "video_promotion", label: "Promote my video", hint: "Get more views, likes and shares on one video", linkLabel: "Link to your video" },
+  { key: "profile_promotion", label: "Promote my profile or page", hint: "Get more followers on your channel, page or profile", linkLabel: "Link to your profile or page" },
 ];
 const CATEGORIES = ["Tech", "Beauty", "Fitness", "Lifestyle", "Finance", "Travel", "Gaming", "Comedy", "Fashion", "Food", "Outdoor", "Other"];
 
+const dayString = (offsetDays) => {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+};
+
 function CampaignForm({ existing, onCancel, onSaved }) {
   const [form, setForm] = useState({
-    title: existing?.title || "", description: existing?.description || "",
-    platform: existing?.platform || "YOUTUBE", contentUrl: existing?.contentUrl || "",
-    category: existing?.category || CATEGORIES[0], campaignType: existing?.campaignType || "sponsored_post",
+    title: existing?.title || "", platform: existing?.platform || "YOUTUBE",
+    accountName: existing?.accountName || "", contentUrl: existing?.contentUrl || "",
+    category: existing?.category || "Other", campaignType: existing?.campaignType || "video_promotion",
     requirements: existing?.requirements || "", eligibilityRequirements: existing?.eligibilityRequirements || "",
-    targetCountry: existing?.targetCountry || "", budget: existing?.budget || "", budgetPerCreator: existing?.budgetPerCreator || "",
-    maxCreators: existing?.maxCreators || 3,
-    startDate: existing?.startDate ? existing.startDate.slice(0, 10) : "",
-    endDate: existing?.endDate ? existing.endDate.slice(0, 10) : "",
+    targetCountry: existing?.targetCountry || "",
+    budgetPerCreator: existing?.budgetPerCreator || "", maxCreators: existing?.maxCreators || 1,
+    startDate: existing?.startDate ? existing.startDate.slice(0, 10) : dayString(0),
+    endDate: existing?.endDate ? existing.endDate.slice(0, 10) : dayString(14),
   });
-  const [reqList, setReqList] = useState(existing?.requirementsList || []);
-  const [reqInput, setReqInput] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
-  const addReq = () => { if (reqInput.trim()) { setReqList([...reqList, reqInput.trim()]); setReqInput(""); } };
-  const removeReq = (i) => setReqList(reqList.filter((_, idx) => idx !== i));
+  const goal = GOALS.find((g) => g.key === form.campaignType);
+  const perCreator = Number(form.budgetPerCreator) || 0;
+  const creators = Number(form.maxCreators) || 0;
+  const total = perCreator * creators;
 
-  const buildPayload = () => ({
-    title: form.title, description: form.description, platform: form.platform, contentUrl: form.contentUrl,
-    category: form.category, campaignType: form.campaignType, requirements: form.requirements,
-    eligibilityRequirements: form.eligibilityRequirements || null, requirementsList: reqList,
-    targetCountry: form.targetCountry || null, budget: Number(form.budget), budgetPerCreator: Number(form.budgetPerCreator),
-    maxCreators: Number(form.maxCreators), startDate: new Date(form.startDate).toISOString(), endDate: new Date(form.endDate).toISOString(),
-  });
+  const buildPayload = () => {
+    const name = form.accountName.trim();
+    return {
+      title: form.title.trim() || `${goal ? goal.label : "Promotion"}${name ? `: ${name}` : ""}`,
+      // The old "description" box is gone: the creator instructions double as the description.
+      description: existing?.description || form.requirements.trim(),
+      platform: form.platform, contentUrl: form.contentUrl.trim(), accountName: name,
+      category: form.category, campaignType: form.campaignType, requirements: form.requirements.trim(),
+      eligibilityRequirements: form.eligibilityRequirements.trim() || null,
+      requirementsList: existing?.requirementsList || [],
+      targetCountry: form.targetCountry.trim() || null,
+      budget: total, budgetPerCreator: perCreator, maxCreators: creators,
+      startDate: new Date(form.startDate).toISOString(), endDate: new Date(form.endDate).toISOString(),
+    };
+  };
+
+  const validate = () => {
+    if (!form.accountName.trim()) return "Please type the name of your channel or page.";
+    if (!/^https?:\/\/\S+$/i.test(form.contentUrl.trim())) return "Please paste the full link. It must start with https://";
+    if (form.requirements.trim().length < 10) return "Please tell creators what to do (at least a few words).";
+    if (perCreator <= 0) return "Please enter how much you will pay each creator.";
+    if (!Number.isInteger(creators) || creators < 1) return "Please enter how many creators you need (1 or more).";
+    if (!form.startDate || !form.endDate) return "Please choose the start date and the last date.";
+    if (new Date(form.endDate) <= new Date(form.startDate)) return "The last date must be after the start date.";
+    return "";
+  };
 
   const submit = async (doSubmit) => {
+    const problem = validate();
+    if (problem) { setError(problem); return; }
     setError("");
-    if (!form.title || !form.description || !form.contentUrl || !form.requirements || !form.budget || !form.budgetPerCreator || !form.startDate || !form.endDate) {
-      setError("Please fill in all required fields.");
-      return;
-    }
     setBusy(true);
     try {
       if (existing) await api.updateCampaign(existing.id, { ...buildPayload(), submit: doSubmit });
       else await api.createCampaign({ ...buildPayload(), submit: doSubmit });
       onSaved();
     } catch (err) {
-      setError(err.message || "Failed to save campaign");
+      setError(err.message || "Could not save. Please check the form and try again.");
     }
     setBusy(false);
   };
@@ -67,14 +87,23 @@ function CampaignForm({ existing, onCancel, onSaved }) {
       <button className="back-link" onClick={onCancel}><ChevronLeft size={15} /> Back to campaigns</button>
       <div className="wizard-card">
         <div className="wizard-title">{existing ? "Edit campaign" : "New campaign"}</div>
-        <p className="wizard-hint">Drafts can be edited freely. Submitting moves it to Pending Payment.</p>
+        <p className="wizard-hint">Fill this form, then pay. After we confirm your payment, press Publish and creators can see your campaign.</p>
         {error && <div className="auth-error">{error}</div>}
 
-        <div className="field"><label>Campaign title</label><input type="text" placeholder="e.g. Autumn Product Launch" value={form.title} onChange={set("title")} /></div>
-        <div className="field"><label>Description</label><textarea placeholder="What is this campaign about?" value={form.description} onChange={set("description")} /></div>
+        <div className="field">
+          <label>1. What do you want?</label>
+          <div className="platform-grid">
+            {GOALS.map((g) => (
+              <button type="button" key={g.key} className={`platform-opt ${form.campaignType === g.key ? "active" : ""}`} onClick={() => setForm({ ...form, campaignType: g.key })}>
+                <span style={{ fontWeight: 600 }}>{g.label}</span>
+                <span style={{ fontSize: 12, opacity: 0.75, fontWeight: 400 }}>{g.hint}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="field">
-          <label>Platform</label>
+          <label>2. Which app?</label>
           <div className="platform-grid">
             {Object.entries(PLATFORM_ICONS).filter(([k]) => k !== "OTHER").map(([key, Icon]) => (
               <button type="button" key={key} className={`platform-opt ${form.platform === key ? "active" : ""}`} onClick={() => setForm({ ...form, platform: key })}>
@@ -84,51 +113,51 @@ function CampaignForm({ existing, onCancel, onSaved }) {
             ))}
           </div>
         </div>
-        <div className="field"><label>Content URL</label><input type="text" placeholder="https://..." value={form.contentUrl} onChange={set("contentUrl")} /></div>
-
-        <div className="field-row">
-          <div className="field">
-            <label>Category</label>
-            <select value={form.category} onChange={set("category")}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>
-          </div>
-          <div className="field">
-            <label>Campaign type</label>
-            <select value={form.campaignType} onChange={set("campaignType")}>{CAMPAIGN_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select>
-          </div>
-        </div>
-
-        <div className="field"><label>Requirements (description)</label><textarea placeholder="Deliverables, talking points, disclosure requirements..." value={form.requirements} onChange={set("requirements")} /></div>
 
         <div className="field">
-          <label>Itemized requirements checklist</label>
-          <div className="chip-input">
-            <input type="text" placeholder="e.g. Tag @brand in caption" value={reqInput} onChange={(e) => setReqInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addReq(); } }} />
-            <button type="button" className="btn btn-ghost btn-sm" onClick={addReq}><Plus size={14} /> Add</button>
-          </div>
-          <div className="tag-row">
-            {reqList.map((r, i) => <span className="tag" key={i}>{r} <button onClick={() => removeReq(i)}><XCircle size={11} /></button></span>)}
-          </div>
+          <label>3. Name of your channel, page or profile</label>
+          <input type="text" placeholder="e.g. Ali Tech Tips" value={form.accountName} onChange={set("accountName")} />
+        </div>
+        <div className="field">
+          <label>4. {goal ? goal.linkLabel : "Link"}</label>
+          <input type="text" inputMode="url" placeholder="https://..." value={form.contentUrl} onChange={set("contentUrl")} />
+          <div className="field-hint">Open your video or profile, copy the link from the address bar, and paste it here.</div>
         </div>
 
-        <div className="field"><label>Creator eligibility requirements</label><textarea placeholder="e.g. Must have 10k+ subscribers, must post publicly..." value={form.eligibilityRequirements} onChange={set("eligibilityRequirements")} /></div>
-        <div className="field"><label>Target country</label><input type="text" placeholder="e.g. United States" value={form.targetCountry} onChange={set("targetCountry")} /></div>
+        <div className="field">
+          <label>5. What should the creator do?</label>
+          <textarea placeholder="e.g. Watch my video, like it, and share it with your followers." value={form.requirements} onChange={set("requirements")} />
+        </div>
 
         <div className="field-row">
-          <div className="field"><label>Total budget (USD)</label><input type="number" min="1" value={form.budget} onChange={set("budget")} /></div>
-          <div className="field"><label>Budget per creator (USD)</label><input type="number" min="1" value={form.budgetPerCreator} onChange={set("budgetPerCreator")} /></div>
+          <div className="field"><label>6. Pay each creator (Rs)</label><input type="number" min="1" value={form.budgetPerCreator} onChange={set("budgetPerCreator")} /></div>
+          <div className="field"><label>How many creators?</label><input type="number" min="1" value={form.maxCreators} onChange={set("maxCreators")} /></div>
         </div>
-        <div className="field"><label>Number of creators required</label><input type="number" min="1" value={form.maxCreators} onChange={set("maxCreators")} /></div>
+        {total > 0 && <div className="field-hint" style={{ marginBottom: 14 }}>Total you will pay: <strong>{fmt(total)}</strong> ({fmt(perCreator)} × {creators})</div>}
 
         <div className="field-row">
-          <div className="field"><label>Start date</label><input type="date" value={form.startDate} onChange={set("startDate")} /></div>
-          <div className="field"><label>End date / deadline</label><input type="date" value={form.endDate} onChange={set("endDate")} /></div>
+          <div className="field"><label>7. Start date</label><input type="date" value={form.startDate} onChange={set("startDate")} /></div>
+          <div className="field"><label>Last date</label><input type="date" value={form.endDate} onChange={set("endDate")} /></div>
         </div>
+
+        <details style={{ marginBottom: 16 }}>
+          <summary style={{ cursor: "pointer", fontSize: 13.5, fontWeight: 600 }}>More options (not needed)</summary>
+          <div style={{ marginTop: 12 }}>
+            <div className="field"><label>Campaign name</label><input type="text" placeholder="We will choose a name for you if you leave this empty" value={form.title} onChange={set("title")} /></div>
+            <div className="field">
+              <label>Topic</label>
+              <select value={form.category} onChange={set("category")}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>
+            </div>
+            <div className="field"><label>Creator must live in (country)</label><input type="text" placeholder="e.g. Pakistan" value={form.targetCountry} onChange={set("targetCountry")} /></div>
+            <div className="field"><label>Anything creators must have</label><textarea placeholder="e.g. At least 10,000 followers" value={form.eligibilityRequirements} onChange={set("eligibilityRequirements")} /></div>
+          </div>
+        </details>
 
         <div className="wizard-nav">
           <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button className="btn btn-ghost" disabled={busy} onClick={() => submit(false)}>Save as draft</button>
-            <button className="btn btn-primary" disabled={busy} onClick={() => submit(true)}>Submit for payment</button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button className="btn btn-ghost" disabled={busy} onClick={() => submit(false)}>Save for later</button>
+            <button className="btn btn-primary" disabled={busy} onClick={() => submit(true)}>Continue to payment</button>
           </div>
         </div>
       </div>
@@ -273,6 +302,14 @@ function PaymentBox({ campaign, onFunded }) {
     </div>
   );
 }
+
+// Plain-words "what do I do now" for each stage, so advertisers are never stuck.
+const NEXT_STEP = {
+  DRAFT: "Your campaign is saved but not sent yet. Press Edit, then Continue to payment.",
+  PENDING_PAYMENT: "Pay using EasyPaisa below and send us the transaction ID. We check it and confirm your payment.",
+  FUNDED: "Your payment is confirmed. Press the Publish button below. Creators cannot see your campaign until you publish it.",
+  PUBLISHED: "Your campaign is live. Creators can see it and apply. Check the Applications tab and accept the creators you like.",
+};
 
 function PublishBox({ campaign, onPublished }) {
   const [busy, setBusy] = useState(false);
@@ -471,6 +508,11 @@ function CampaignDetail({ campaignId, onBack }) {
         </div>
       </div>
 
+      {NEXT_STEP[campaign.status] && (
+        <div className="divider-note" style={{ marginBottom: 14, display: "flex", gap: 8, alignItems: "center" }}>
+          <Info size={14} /> <span><strong>Next step:</strong> {NEXT_STEP[campaign.status]}</span>
+        </div>
+      )}
       {campaign.status === "PENDING_PAYMENT" && <PaymentBox campaign={campaign} onFunded={load} />}
       {campaign.status === "FUNDED" && <PublishBox campaign={campaign} onPublished={load} />}
 
@@ -483,9 +525,10 @@ function CampaignDetail({ campaignId, onBack }) {
       {tab === "overview" && (
         <div className="two-col">
           <div>
-            <div className="review-block"><h4>Description</h4><div className="val dim">{campaign.description}</div></div>
-            <div className="review-block"><h4>Content URL</h4><div className="val" style={{ wordBreak: "break-all" }}>{campaign.contentUrl}</div></div>
-            <div className="review-block"><h4>Requirements</h4><div className="val dim">{campaign.requirements}</div>
+            {campaign.accountName && <div className="review-block"><h4>Channel / page name</h4><div className="val">{campaign.accountName}</div></div>}
+            <div className="review-block"><h4>Link</h4><div className="val" style={{ wordBreak: "break-all" }}>{campaign.contentUrl}</div></div>
+            {campaign.description && campaign.description !== campaign.requirements && <div className="review-block"><h4>Description</h4><div className="val dim">{campaign.description}</div></div>}
+            <div className="review-block"><h4>What the creator should do</h4><div className="val dim">{campaign.requirements}</div>
               {campaign.requirementsList?.length > 0 && <div className="tag-row">{campaign.requirementsList.map((r, i) => <span className="tag" key={i}>{r}</span>)}</div>}
             </div>
             {campaign.eligibilityRequirements && <div className="review-block"><h4>Eligibility</h4><div className="val dim">{campaign.eligibilityRequirements}</div></div>}

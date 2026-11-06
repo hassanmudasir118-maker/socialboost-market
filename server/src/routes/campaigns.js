@@ -28,6 +28,7 @@ function serializeCampaign(c, extra = {}) {
     description: c.description,
     platform: c.platform,
     contentUrl: c.content_url,
+    accountName: c.account_name,
     category: c.category,
     campaignType: c.campaign_type,
     requirements: c.requirements,
@@ -114,6 +115,7 @@ const campaignSchema = z.object({
   description: z.string().min(10),
   platform: z.enum(["YOUTUBE", "TIKTOK", "INSTAGRAM", "FACEBOOK", "OTHER"]),
   contentUrl: z.string().url(),
+  accountName: z.string().min(1).max(160).optional().nullable(),
   category: z.string().min(1),
   campaignType: z.string().min(1),
   requirements: z.string().min(10),
@@ -158,14 +160,14 @@ router.post("/", requireAuth, requireRole("ADVERTISER"), validate(campaignSchema
   const id = newId("cmp");
   const ts = nowIso();
   await run(
-    `INSERT INTO campaigns (id, advertiser_id, title, description, platform, content_url, category, campaign_type,
+    `INSERT INTO campaigns (id, advertiser_id, title, description, platform, content_url, account_name, category, campaign_type,
        requirements, eligibility_requirements, target_country, audience_age_min, audience_age_max, audience_gender,
        audience_locations, audience_interests, budget_cents, budget_per_creator_cents, commission_bps, max_creators,
        creator_min_followers, creator_min_engagement_bps, creator_required_country,
        start_date, end_date, status, admin_approved, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, 'DRAFT', 0, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, 'DRAFT', 0, ?, ?)`,
     [
-      id, req.user.id, b.title, b.description, b.platform, b.contentUrl, b.category, b.campaignType,
+      id, req.user.id, b.title, b.description, b.platform, b.contentUrl, b.accountName ?? null, b.category, b.campaignType,
       b.requirements, b.eligibilityRequirements ?? null, b.targetCountry ?? null, b.audienceAgeMin ?? null, b.audienceAgeMax ?? null,
       b.audienceGender ?? null, JSON.stringify(b.audienceLocations), JSON.stringify(b.audienceInterests),
       dollarsToCents(b.budget), dollarsToCents(b.budgetPerCreator), b.maxCreators,
@@ -287,7 +289,7 @@ router.patch("/:id", requireAuth, requireRole("ADVERTISER"), asyncHandler(async 
   const ts = nowIso();
   await run(
     `UPDATE campaigns SET title=COALESCE(?,title), description=COALESCE(?,description), platform=COALESCE(?,platform),
-     content_url=COALESCE(?,content_url), category=COALESCE(?,category), campaign_type=COALESCE(?,campaign_type),
+     content_url=COALESCE(?,content_url), account_name=COALESCE(?,account_name), category=COALESCE(?,category), campaign_type=COALESCE(?,campaign_type),
      requirements=COALESCE(?,requirements), eligibility_requirements=COALESCE(?,eligibility_requirements),
      target_country=COALESCE(?,target_country), audience_age_min=COALESCE(?,audience_age_min),
      audience_age_max=COALESCE(?,audience_age_max), audience_gender=COALESCE(?,audience_gender),
@@ -298,7 +300,7 @@ router.patch("/:id", requireAuth, requireRole("ADVERTISER"), asyncHandler(async 
      start_date=COALESCE(?,start_date), end_date=COALESCE(?,end_date),
      updated_at=? WHERE id=?`,
     [
-      b.title ?? null, b.description ?? null, b.platform ?? null, b.contentUrl ?? null, b.category ?? null, b.campaignType ?? null,
+      b.title ?? null, b.description ?? null, b.platform ?? null, b.contentUrl ?? null, b.accountName ?? null, b.category ?? null, b.campaignType ?? null,
       b.requirements ?? null, b.eligibilityRequirements ?? null, b.targetCountry ?? null, b.audienceAgeMin ?? null, b.audienceAgeMax ?? null,
       b.audienceGender ?? null, b.audienceLocations ? JSON.stringify(b.audienceLocations) : null, b.audienceInterests ? JSON.stringify(b.audienceInterests) : null,
       b.budget != null ? dollarsToCents(b.budget) : null, b.budgetPerCreator != null ? dollarsToCents(b.budgetPerCreator) : null,
@@ -633,7 +635,7 @@ router.post("/assignments/:assignmentId/deliverables/review", requireAuth, requi
         if (remainingActive === 0) await statusService.transitionCampaign(campaign.id, "COMPLETED", { actorId: req.user.id, note: "All assignments completed" });
         else if (["SUBMITTED", "UNDER_REVIEW"].includes(campaign.status)) await statusService.transitionCampaign(campaign.id, "IN_PROGRESS", { actorId: req.user.id, note: "Other creators still active" });
 
-        await notificationService.notify(assignment.creator_id, { icon: "payment", title: "Payment released", body: `You received $${netCents.toFixed(2)} for "${campaign.title}".` });
+        await notificationService.notify(assignment.creator_id, { icon: "payment", title: "Payment released", body: `You received Rs ${netCents.toFixed(2)} for "${campaign.title}".` });
         await auditService.log({ actorId: req.user.id, actorRole: "ADVERTISER", action: "Approved deliverable & released payment", targetType: "Assignment", targetId: assignment.id, campaignId: campaign.id });
       } else if (req.body.decision === "revision") {
         await run("UPDATE campaign_deliverables SET status='REVISION_REQUESTED', review_note=?, updated_at=? WHERE id=?", [req.body.note || null, ts, deliverable.id]);

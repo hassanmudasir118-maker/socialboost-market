@@ -177,6 +177,7 @@ router.get("/withdrawals", asyncHandler(async (req, res) => {
       id: w.id, userEmail: w.email, amount: centsToDollars(w.amount_cents), fee: centsToDollars(w.fee_cents),
       net: centsToDollars(w.net_cents), status: w.status, payoutProvider: w.payout_provider, payoutProviderId: w.payout_provider_id,
       payoutStatus: w.payout_status, payoutFailureReason: w.payout_failure_reason, payoutRetryCount: w.payout_retry_count,
+      payoutAccountMethod: w.payout_account_method, payoutAccountName: w.payout_account_name, payoutAccountNumber: w.payout_account_number,
       requestedAt: w.requested_at, decidedAt: w.decided_at,
     })),
   });
@@ -193,13 +194,14 @@ router.post("/withdrawals/:id/resolve", validate(resolveWithdrawSchema), async (
       withdrawalId: req.params.id,
       approve: req.body.approve,
       adminId: req.user.id,
-      payoutMethod: req.body.payoutMethod === "MANUAL" ? "MANUAL" : undefined,
+      // MANUAL is the safe default: no automated payout provider is configured, so the AUTO path would crash in production.
+      payoutMethod: req.body.payoutMethod === "AUTO" ? undefined : "MANUAL",
     });
-    await auditService.log({ actorId: req.user.id, actorRole: "ADMIN", action: req.body.approve ? `Approved withdrawal (payout ${req.body.payoutMethod === "MANUAL" ? "MANUAL" : "processing"})` : "Rejected withdrawal", targetType: "Withdrawal", targetId: w.id, details: `$${centsToDollars(w.amount_cents)}` });
+    await auditService.log({ actorId: req.user.id, actorRole: "ADMIN", action: req.body.approve ? `Approved withdrawal (payout ${req.body.payoutMethod === "AUTO" ? "processing" : "MANUAL"})` : "Rejected withdrawal", targetType: "Withdrawal", targetId: w.id, details: `Rs ${centsToDollars(w.amount_cents)}` });
     await notificationService.notify(w.user_id, {
       icon: req.body.approve ? "payment" : "alert",
       title: req.body.approve ? "Withdrawal approved — payout processing" : "Withdrawal rejected",
-      body: req.body.approve ? `Your withdrawal of $${centsToDollars(w.amount_cents)} was approved and is being processed.` : `Your withdrawal of $${centsToDollars(w.amount_cents)} was rejected and refunded.`,
+      body: req.body.approve ? `Your withdrawal of Rs ${centsToDollars(w.amount_cents)} was approved and is being processed.` : `Your withdrawal of Rs ${centsToDollars(w.amount_cents)} was rejected and refunded.`,
     });
     res.json({ ok: true, payoutStatus: w.payout_status });
   } catch (err) {
@@ -214,7 +216,7 @@ router.post("/withdrawals/:id/payout-completed", async (req, res) => {
   try {
     const w = await withdrawalService.markPayoutCompleted(req.params.id);
     await auditService.log({ actorId: req.user.id, actorRole: "ADMIN", action: "Marked payout completed", targetType: "Withdrawal", targetId: w.id });
-    await notificationService.notify(w.user_id, { icon: "payment", title: "Withdrawal paid out", body: `Your withdrawal of $${centsToDollars(w.amount_cents)} has been paid.` });
+    await notificationService.notify(w.user_id, { icon: "payment", title: "Withdrawal paid out", body: `Your withdrawal of Rs ${centsToDollars(w.amount_cents)} has been paid.` });
     res.json({ ok: true });
   } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
