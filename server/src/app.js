@@ -14,6 +14,8 @@ const referralRoutes = require("./routes/referrals");
 const adminRoutes = require("./routes/admin");
 const paymentRoutes = require("./routes/payments");
 const socialAccountRoutes = require("./routes/socialAccounts");
+const membershipRoutes = require("./routes/membership");
+const taskRoutes = require("./routes/tasks");
 const db = require("./db");
 
 const app = express();
@@ -23,6 +25,9 @@ const app = express();
 app.set("trust proxy", 1);
 
 app.use(helmet());
+if (process.env.NODE_ENV === "production" && (!process.env.CORS_ORIGIN || process.env.CORS_ORIGIN === "*")) {
+  console.warn("WARNING: CORS_ORIGIN is open to every website. Set it to your site address (e.g. https://yoursite.netlify.app).");
+}
 app.use(cors({ origin: process.env.CORS_ORIGIN || "*", credentials: true }));
 
 // The webhook route needs the RAW request body to verify the provider's
@@ -38,6 +43,19 @@ app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use("/api/", rateLimit({ windowMs: 60_000, max: 300 }));
 app.use("/api/auth/", rateLimit({ windowMs: 60_000, max: 20 }));
 app.use("/api/auth/forgot-password", rateLimit({ windowMs: 15 * 60_000, max: 5 }));
+// Slow down password guessing: 10 failed logins per 15 minutes per IP
+// (successful logins don't count against the limit).
+app.use("/api/auth/login", rateLimit({
+  windowMs: 15 * 60_000,
+  max: 10,
+  skipSuccessfulRequests: true,
+  message: { error: "Too many login attempts. Please wait 15 minutes and try again." },
+}));
+app.use("/api/auth/register", rateLimit({
+  windowMs: 60 * 60_000,
+  max: 20,
+  message: { error: "Too many sign-ups from this network. Please try again later." },
+}));
 
 app.get("/api/health", (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
@@ -63,6 +81,8 @@ app.use("/api/referrals", referralRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/social-accounts", socialAccountRoutes);
+app.use("/api/membership", membershipRoutes);
+app.use("/api/tasks", taskRoutes);
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 

@@ -329,11 +329,101 @@ function ActivityLogModule() {
   );
 }
 
+function TaskOrdersModule() {
+  const [orders, setOrders] = useState(null);
+  const [err, setErr] = useState(null);
+  const load = () => api.adminTaskOrders().then((r) => setOrders(r.orders)).catch((e) => setErr(e.message));
+  useEffect(() => { load(); }, []);
+  const act = async (fn, id) => { setErr(null); try { await fn(id); await load(); } catch (e) { setErr(e.message); } };
+  if (!orders) return <div className="empty">{err || "Loading…"}</div>;
+  return (
+    <div className="panel">
+      <div className="panel-head"><h3>Follower / like orders: check the payment first</h3><span className="badge badge-muted">{orders.length}</span></div>
+      <div className="panel-body">
+        {err && <p style={{ color: "var(--coral)", padding: 12 }}>{err}</p>}
+        {orders.length === 0 ? <div className="empty">No orders yet.</div> : orders.map((o) => (
+          <div className="row" key={o.id}>
+            <div>
+              <div className="row-title">{o.quantity} {o.actionLabel} · {o.platform} · {fmt(o.total)}</div>
+              <div className="row-sub">{o.email} · {o.status}{o.paymentReference ? ` · ${o.paymentMethod}: ${o.paymentReference}` : ""} · {o.done}/{o.quantity} done</div>
+            </div>
+            {o.status === "AWAITING_CONFIRMATION" && (
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-primary btn-sm" onClick={() => act(api.adminConfirmTaskOrder, o.id)}>Payment received: start</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => act(api.adminRejectTaskOrder, o.id)}>Not found</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MembershipModule() {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState(null);
+  const load = () => api.adminMembershipRequests().then(setD).catch((e) => setErr(e.message));
+  useEffect(() => { load(); }, []);
+  const act = async (fn, id) => { setErr(null); try { await fn(id); await load(); } catch (e) { setErr(e.message); } };
+  if (!d) return <div className="empty">{err || "Loading…"}</div>;
+  const pending = d.requests.filter((r) => r.status === "PENDING");
+  const done = d.requests.filter((r) => r.status !== "PENDING");
+  return (
+    <>
+      {err && <p style={{ color: "var(--coral)", marginBottom: 12 }}>{err}</p>}
+      <div className="panel">
+        <div className="panel-head"><h3>Membership requests: check the payment first</h3><span className="badge badge-gold">{pending.length}</span></div>
+        <div className="panel-body">
+          {pending.length === 0 ? <div className="empty">No requests waiting.</div> : pending.map((r) => (
+            <div className="row" key={r.id}>
+              <div>
+                <div className="row-title">{r.name || r.email} wants {r.planId}</div>
+                <div className="row-sub">{r.email} · Payment reference: <b>{r.paymentReference}</b></div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-primary btn-sm" onClick={() => act(api.adminApproveMembership, r.id)}>Payment received: activate</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => act(api.adminRejectMembership, r.id)}>Reject</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="panel" style={{ marginTop: 18 }}>
+        <div className="panel-head"><h3>Active paid members</h3><span className="badge badge-muted">{d.members.length}</span></div>
+        <div className="panel-body">
+          {d.members.length === 0 ? <div className="empty">No paid members yet.</div> : d.members.map((m) => (
+            <div className="row" key={m.userId}>
+              <div><div className="row-title">{m.name || m.email}</div><div className="row-sub">{m.email}</div></div>
+              <div><span className="badge badge-violet">{m.planId}</span> <span className="row-sub">until {m.expiresAt ? new Date(m.expiresAt).toLocaleDateString() : "-"}</span></div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {done.length > 0 && (
+        <div className="panel" style={{ marginTop: 18 }}>
+          <div className="panel-head"><h3>Past requests</h3></div>
+          <div className="panel-body">
+            {done.map((r) => (
+              <div className="row" key={r.id}>
+                <div><div className="row-title">{r.name || r.email}: {r.planId}</div><div className="row-sub">{r.paymentReference}</div></div>
+                <span className={`badge ${r.status === "APPROVED" ? "badge-mint" : "badge-red"}`}>{r.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function AdminDashboard({ tab }) {
   if (tab === "overview") return <Overview />;
   if (tab === "users") return <UsersModule />;
   if (tab === "campaigns") return <CampaignsModule />;
   if (tab === "withdrawals") return <WithdrawalsModule />;
+  if (tab === "membership") return <MembershipModule />;
+  if (tab === "tasks") return <TaskOrdersModule />;
   if (tab === "manual-payments") return <ManualPaymentsModule />;
   if (tab === "disputes") return <DisputesModule />;
   if (tab === "analytics") return <AnalyticsModule />;

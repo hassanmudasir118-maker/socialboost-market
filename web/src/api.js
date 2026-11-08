@@ -157,6 +157,30 @@ export const api = {
   myWithdrawals: () => request("/wallet/withdrawals"),
   requestWithdrawal: (amount) => request("/wallet/withdrawals", { method: "POST", body: { amount } }),
 
+  // Membership
+  getMembership: () => request("/membership"),
+  requestMembership: (planId, paymentReference) => request("/membership/request", { method: "POST", body: { planId, paymentReference } }),
+  adminMembershipRequests: () => request("/membership/admin/requests"),
+  adminApproveMembership: (id) => request(`/membership/admin/requests/${id}/approve`, { method: "POST" }),
+  adminRejectMembership: (id) => request(`/membership/admin/requests/${id}/reject`, { method: "POST" }),
+
+  // Quick tasks (follow / like / subscribe)
+  taskRates: () => request("/tasks/rates"),
+  createTaskOrder: (payload) => request("/tasks/orders", { method: "POST", body: payload }),
+  myTaskOrders: () => request("/tasks/orders"),
+  payTaskOrder: (id, method, reference) => request(`/tasks/orders/${id}/payment`, { method: "POST", body: { method, reference } }),
+  cancelTaskOrder: (id) => request(`/tasks/orders/${id}/cancel`, { method: "POST" }),
+  taskOrderClaims: (id) => request(`/tasks/orders/${id}/claims`),
+  approveTaskClaim: (id) => request(`/tasks/claims/${id}/approve`, { method: "POST" }),
+  rejectTaskClaim: (id, reason) => request(`/tasks/claims/${id}/reject`, { method: "POST", body: { reason } }),
+  availableTasks: () => request("/tasks/available"),
+  startTask: (orderId) => request(`/tasks/${orderId}/start`, { method: "POST" }),
+  claimTask: (orderId, username) => request(`/tasks/${orderId}/claim`, { method: "POST", body: { username } }),
+  myTasks: () => request("/tasks/my"),
+  adminTaskOrders: () => request("/tasks/admin/orders"),
+  adminConfirmTaskOrder: (id) => request(`/tasks/admin/orders/${id}/confirm`, { method: "POST" }),
+  adminRejectTaskOrder: (id) => request(`/tasks/admin/orders/${id}/reject`, { method: "POST" }),
+
   // Notifications
   getNotifications: () => request("/notifications"),
   markNotificationsRead: () => request("/notifications/read", { method: "POST" }),

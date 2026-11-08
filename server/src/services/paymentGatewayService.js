@@ -1,4 +1,5 @@
 const { get, run, transaction, nowIso } = require("../db");
+const membershipService = require("./membershipService");
 const { newId } = require("../utils/ids");
 const { applyBps } = require("../utils/money");
 const { getProvider } = require("./paymentProvider");
@@ -47,6 +48,8 @@ async function createCampaignCheckout({ campaignId, advertiserId, promoCode, ide
       commissionBps = Math.max(0, commissionBps - promo.discount_bps);
       appliedPromo = promo.code;
     }
+    // Advertiser membership (Pro/VIP) lowers the commission further.
+    commissionBps = Math.max(0, commissionBps - (await membershipService.getDiscountBps(advertiserId)));
     await run("UPDATE campaigns SET commission_bps = ?, promo_code = ? WHERE id = ?", [commissionBps, appliedPromo, campaignId]);
 
     const feeCents = applyBps(campaign.budget_cents, commissionBps);
@@ -262,6 +265,9 @@ async function createManualCheckout({ campaignId, advertiserId, method, idempote
     let commissionBps = settings.commission_bps;
     let appliedPromo = null;
     if (campaign.promo_code) { commissionBps = campaign.commission_bps; appliedPromo = campaign.promo_code; }
+    else commissionBps = Math.max(0, commissionBps - (await membershipService.getDiscountBps(advertiserId)));
+    // The creator payout fee is read from the campaign row later, so store the final rate there.
+    await run("UPDATE campaigns SET commission_bps = ? WHERE id = ?", [commissionBps, campaignId]);
     const feeCents = applyBps(campaign.budget_cents, commissionBps);
     const creatorAllocationCents = campaign.budget_cents - feeCents;
 

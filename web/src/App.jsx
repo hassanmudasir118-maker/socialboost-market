@@ -1,14 +1,27 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import { api } from "./api";
 import { Nav, Homepage, Footer } from "./Marketing";
 import AuthPage from "./AuthPage";
 import ForgotPassword from "./ForgotPassword";
 import ResetPassword from "./ResetPassword";
 import VerifyEmail from "./VerifyEmail";
-import Dashboard from "./Dashboard";
-import HelpCenter from "./HelpCenter";
 import WhatsAppButton from "./WhatsAppButton";
 import "./styles.css";
+
+// The dashboards (and the charts library they use) are only needed after
+// login, so they load on demand. This keeps the home page small and fast,
+// especially on mobile data.
+const Dashboard = lazy(() => import("./Dashboard"));
+const HelpCenter = lazy(() => import("./HelpCenter"));
+
+function PageLoader() {
+  return (
+    <div className="sbm-loader" role="status" aria-live="polite">
+      <div className="sbm-spinner" />
+      <span>Loading…</span>
+    </div>
+  );
+}
 
 // Reads a token-carrying link the user landed on directly (e.g. from an
 // emailed reset/verify link) before any other routing state is decided.
@@ -103,7 +116,8 @@ export default function App() {
     <div className="sbm" data-theme={theme}>
       {page !== "dashboard" && <Nav onGo={goTo} session={session} onLogout={handleLogout} theme={theme} onToggleTheme={toggleTheme} />}
       {page === "home" && <Homepage onGo={goTo} />}
-      {page === "help" && <HelpCenter onGo={goTo} />}
+      <Suspense fallback={<PageLoader />}>
+      {page === "help" && <HelpCenter onGo={goTo} />}}
       {page === "login" && <AuthPage mode="login" onGo={goTo} onAuth={handleAuth} />}
       {page === "signup" && <AuthPage mode="signup" onGo={goTo} onAuth={handleAuth} presetRole={presetRole} />}
       {page === "forgot-password" && <ForgotPassword onGo={goTo} />}
@@ -120,6 +134,7 @@ export default function App() {
           onConsumeSocialCallback={() => setSocialCallback(null)}
         />
       )}
+      </Suspense>
       {page !== "dashboard" && <Footer />}
       <WhatsAppButton />
     </div>

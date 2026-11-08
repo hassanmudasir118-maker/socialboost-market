@@ -732,6 +732,10 @@ router.post("/applications/:appId/reviews", requireAuth, validate(ratingSchema),
 }));
 
 router.get("/applications/:appId/reviews", requireAuth, asyncHandler(async (req, res) => {
+  const app = await get("SELECT * FROM campaign_applications WHERE id = ?", [req.params.appId]);
+  if (!app) return res.status(404).json({ error: "Application not found" });
+  const campaign = await get("SELECT advertiser_id FROM campaigns WHERE id = ?", [app.campaign_id]);
+  if (req.user.id !== app.creator_id && req.user.id !== campaign.advertiser_id && req.user.role !== "ADMIN") return res.status(403).json({ error: "Not authorized" });
   res.json({ reviews: await all("SELECT * FROM reviews WHERE application_id = ?", [req.params.appId]) });
 }));
 

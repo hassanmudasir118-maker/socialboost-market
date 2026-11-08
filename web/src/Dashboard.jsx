@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { LayoutGrid, Search, Handshake, Wallet, Users, Megaphone, Download, Flag, BarChart3, Settings, History, LogOut, Bell, UserCog, Banknote } from "lucide-react";
+import { LayoutGrid, Search, Handshake, Wallet, Users, Megaphone, Download, Flag, BarChart3, Settings, History, LogOut, Bell, UserCog, Banknote, Crown, Zap, TrendingUp, ListChecks } from "lucide-react";
 import { api } from "./api";
 import { initials } from "./shared";
 import AdvertiserDashboard from "./AdvertiserDashboard";
@@ -7,14 +7,20 @@ import CreatorDashboard from "./CreatorDashboard";
 import AdminDashboard from "./AdminDashboard";
 import Marketplace from "./Marketplace";
 import AccountSettings from "./AccountSettings";
+import Membership from "./Membership";
+import QuickTasks from "./QuickTasks";
+import Growth from "./Growth";
 
 const NAV_CONFIG = {
   ADVERTISER: [
+    { key: "growth", label: "Get followers", icon: TrendingUp },
     { key: "campaigns", label: "Campaigns", icon: Megaphone },
     { key: "marketplace", label: "Find creators", icon: Search },
     { key: "wallet", label: "Wallet", icon: Wallet },
+    { key: "membership", label: "Membership", icon: Crown },
   ],
   CREATOR: [
+    { key: "quicktasks", label: "Quick tasks", icon: Zap },
     { key: "opportunities", label: "Opportunities", icon: Search },
     { key: "collabs", label: "My collaborations", icon: Handshake },
     { key: "earnings", label: "Earnings", icon: Wallet },
@@ -25,6 +31,8 @@ const NAV_CONFIG = {
     { key: "campaigns", label: "Campaigns", icon: Megaphone },
     { key: "withdrawals", label: "Withdrawals", icon: Download },
     { key: "manual-payments", label: "Manual payments", icon: Banknote },
+    { key: "tasks", label: "Follower orders", icon: ListChecks },
+    { key: "membership", label: "Memberships", icon: Crown },
     { key: "disputes", label: "Disputes", icon: Flag },
     { key: "analytics", label: "Analytics", icon: BarChart3 },
     { key: "settings", label: "Settings", icon: Settings },
@@ -32,7 +40,7 @@ const NAV_CONFIG = {
   ],
 };
 const ROLE_LABEL = { ADVERTISER: "Advertiser", CREATOR: "Creator", ADMIN: "Admin" };
-const DEFAULT_TAB = { ADVERTISER: "campaigns", CREATOR: "opportunities", ADMIN: "overview" };
+const DEFAULT_TAB = { ADVERTISER: "campaigns", CREATOR: "quicktasks", ADMIN: "overview" };
 
 function NotificationBell() {
   const [notifs, setNotifs] = useState([]);
@@ -101,8 +109,11 @@ export default function Dashboard({ session, onGo, onLogout, onSessionRefresh, i
         <div className="dash-content">
           {tab === "__account" && <AccountSettings session={session} onLogout={onLogout} onSessionRefresh={onSessionRefresh} socialCallback={socialCallback} onConsumeSocialCallback={onConsumeSocialCallback} />}
           {tab !== "__account" && session.role === "ADVERTISER" && tab === "marketplace" && <Marketplace />}
-          {tab !== "__account" && session.role === "ADVERTISER" && tab !== "marketplace" && <AdvertiserDashboard tab={tab} />}
-          {tab !== "__account" && session.role === "CREATOR" && <CreatorDashboard tab={tab} />}
+          {tab !== "__account" && session.role === "ADVERTISER" && tab === "membership" && <Membership />}
+          {tab !== "__account" && session.role === "ADVERTISER" && tab === "growth" && <Growth />}
+          {tab !== "__account" && session.role === "ADVERTISER" && tab !== "marketplace" && tab !== "membership" && tab !== "growth" && <AdvertiserDashboard tab={tab} />}
+          {tab !== "__account" && session.role === "CREATOR" && tab === "quicktasks" && <QuickTasks />}
+          {tab !== "__account" && session.role === "CREATOR" && tab !== "quicktasks" && <CreatorDashboard tab={tab} />}
           {tab !== "__account" && session.role === "ADMIN" && <AdminDashboard tab={tab} />}
         </div>
       </div>

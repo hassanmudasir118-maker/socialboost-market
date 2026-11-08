@@ -16,6 +16,7 @@ const router = express.Router();
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const isDev = process.env.NODE_ENV !== "production";
+const DUMMY_HASH = bcrypt.hashSync("not-a-real-password", 12);
 
 function makeReferralCode(name) {
   const base = (name || "USER").replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 4) || "USER";
@@ -116,7 +117,10 @@ router.post("/login", validate(loginSchema), asyncHandler(async (req, res) => {
 
   // Same generic error whether the email doesn't exist or the password is
   // wrong — never reveal which one it was (account enumeration protection).
-  if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+  // Always run one bcrypt comparison, even for unknown emails, so response
+  // time doesn't reveal whether an account exists.
+  const passwordOk = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
+  if (!user || !passwordOk) {
     return res.status(401).json({ error: "Invalid email or password" });
   }
   if (user.suspended) return res.status(403).json({ error: "This account has been suspended. Contact support." });

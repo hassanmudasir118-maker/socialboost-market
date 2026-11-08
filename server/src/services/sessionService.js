@@ -32,6 +32,9 @@ async function refreshSession(rawRefreshToken, { userAgent, ip } = {}) {
   if (!session) return null;
   if (session.revoked_at) return null;
   if (new Date(session.expires_at) < new Date()) return null;
+  // A suspended or deleted account must not be able to keep renewing its login.
+  const owner = await get("SELECT suspended FROM users WHERE id = ?", [session.user_id]);
+  if (!owner || owner.suspended) return null;
 
   // Rotate: revoke the old refresh token, issue a new one. Limits the damage
   // window if a refresh token is ever stolen (reuse becomes detectable).
