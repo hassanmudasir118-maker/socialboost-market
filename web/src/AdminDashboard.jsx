@@ -329,6 +329,57 @@ function ActivityLogModule() {
   );
 }
 
+const FLAG_BADGE = { high: "badge-red", medium: "badge-gold", info: "badge-muted" };
+const VERDICT = {
+  CHECK_CAREFULLY: { text: "Check carefully", cls: "badge-red" },
+  LOOK_TWICE: { text: "Look twice", cls: "badge-gold" },
+  LOOKS_NORMAL: { text: "Looks normal", cls: "badge-mint" },
+};
+
+function AssistantModule() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  const load = () => api.adminTodo().then(setData).catch((e) => setErr(e.message));
+  useEffect(() => { load(); }, []);
+  if (!data) return <div className="empty">{err || "Loading…"}</div>;
+  return (
+    <>
+      <div className="panel" style={{ marginBottom: 18 }}>
+        <div className="panel-body" style={{ padding: 18 }}>
+          <div className="disp" style={{ fontSize: 18, fontWeight: 600 }}>Your to-do list</div>
+          <p style={{ marginTop: 6 }}>
+            Everything that needs your decision is here, with simple safety checks. The assistant never approves or sends money.
+            Before you approve a payment, always match the amount and transaction ID in your own EasyPaisa/JazzCash app.
+          </p>
+          <p className="row-sub" style={{ marginTop: 6 }}>
+            Phone alerts (Telegram): {data.telegram ? "ON" : "OFF. Ask your developer to add the Telegram settings to turn it on."}
+          </p>
+          <button className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={load}>Refresh</button>
+        </div>
+      </div>
+      <div className="panel">
+        <div className="panel-head"><h3>Waiting for you</h3><span className="badge badge-gold">{data.items.length}</span></div>
+        <div className="panel-body">
+          {data.items.length === 0 ? <div className="empty">Nothing is waiting. All done!</div> : data.items.map((it, i) => (
+            <div className="row" key={i} style={{ alignItems: "flex-start" }}>
+              <div style={{ flex: 1 }}>
+                <div className="row-title">{it.title}</div>
+                <div className="row-sub">{it.detail}</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                  {it.flags.length === 0 && <span className="badge badge-mint">No warnings</span>}
+                  {it.flags.map((f, j) => <span key={j} className={`badge ${FLAG_BADGE[f.level]}`}>{f.text}</span>)}
+                </div>
+                <div className="row-sub" style={{ marginTop: 8 }}>Open the <b>{it.tab}</b> tab to decide.</div>
+              </div>
+              <span className={`badge ${VERDICT[it.verdict].cls}`}>{VERDICT[it.verdict].text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function TaskOrdersModule() {
   const [orders, setOrders] = useState(null);
   const [err, setErr] = useState(null);
@@ -424,6 +475,7 @@ export default function AdminDashboard({ tab }) {
   if (tab === "withdrawals") return <WithdrawalsModule />;
   if (tab === "membership") return <MembershipModule />;
   if (tab === "tasks") return <TaskOrdersModule />;
+  if (tab === "assistant") return <AssistantModule />;
   if (tab === "manual-payments") return <ManualPaymentsModule />;
   if (tab === "disputes") return <DisputesModule />;
   if (tab === "analytics") return <AnalyticsModule />;

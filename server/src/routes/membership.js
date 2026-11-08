@@ -48,6 +48,7 @@ router.post("/request", requireAuth, requireRole("ADVERTISER"), validate(request
     [id, req.user.id, req.body.planId, req.body.paymentReference.trim(), nowIso()]
   );
   await auditService.log({ actorId: req.user.id, actorRole: req.user.role, action: "Requested membership", targetType: "Membership", targetId: id, details: req.body.planId });
+  require("../services/assistantService").alertAdmin("A membership request is waiting for your check (Admin > Assistant).");
   res.status(201).json({ ok: true, id });
 }));
 

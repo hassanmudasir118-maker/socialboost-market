@@ -80,6 +80,7 @@ router.post("/orders/:id/payment", requireAuth, requireRole("ADVERTISER"), valid
   if (o.status !== "PENDING_PAYMENT") throw taskService.httpError(400, "This order is not waiting for payment");
   await run("UPDATE task_orders SET status = 'AWAITING_CONFIRMATION', payment_method = ?, payment_reference = ?, updated_at = ? WHERE id = ?",
     [req.body.method, req.body.reference.trim(), nowIso(), o.id]);
+  require("../services/assistantService").alertAdmin("A follower/like order payment is waiting for your check (Admin > Assistant).");
   res.json({ ok: true });
 }));
 

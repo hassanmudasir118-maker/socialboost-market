@@ -66,6 +66,7 @@ const withdrawSchema = z.object({ amount: z.number().positive() });
 router.post("/withdrawals", requireAuth, validate(withdrawSchema), async (req, res) => {
   try {
     const { withdrawal } = await withdrawalService.requestWithdrawal({ userId: req.user.id, amountCents: dollarsToCents(req.body.amount) });
+    require("../services/assistantService").alertAdmin("A new withdrawal request is waiting (Admin > Assistant).");
     await auditService.log({ actorId: req.user.id, actorRole: req.user.role, action: "Requested withdrawal", targetType: "Withdrawal", targetId: withdrawal.id, details: `Rs ${req.body.amount}` });
     res.status(201).json({ withdrawal: serializeWithdrawal(withdrawal) });
   } catch (err) {

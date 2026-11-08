@@ -16,6 +16,7 @@ const paymentRoutes = require("./routes/payments");
 const socialAccountRoutes = require("./routes/socialAccounts");
 const membershipRoutes = require("./routes/membership");
 const taskRoutes = require("./routes/tasks");
+const assistantRoutes = require("./routes/assistant");
 const db = require("./db");
 
 const app = express();
@@ -83,6 +84,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/social-accounts", socialAccountRoutes);
 app.use("/api/membership", membershipRoutes);
 app.use("/api/tasks", taskRoutes);
+app.use("/api/assistant", assistantRoutes);
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 

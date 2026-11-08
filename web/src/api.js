@@ -181,6 +181,9 @@ export const api = {
   adminConfirmTaskOrder: (id) => request(`/tasks/admin/orders/${id}/confirm`, { method: "POST" }),
   adminRejectTaskOrder: (id) => request(`/tasks/admin/orders/${id}/reject`, { method: "POST" }),
 
+  // Admin assistant
+  adminTodo: () => request("/assistant/todo"),
+
   // Notifications
   getNotifications: () => request("/notifications"),
   markNotificationsRead: () => request("/notifications/read", { method: "POST" }),

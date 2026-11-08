@@ -72,6 +72,7 @@ const manualProofSchema = z.object({ reference: z.string().min(1), note: z.strin
 router.post("/:id/manual-proof", requireAuth, requireRole("ADVERTISER"), validate(manualProofSchema), async (req, res) => {
   try {
     const payment = await gateway.submitManualProof({ paymentId: req.params.id, advertiserId: req.user.id, reference: req.body.reference, note: req.body.note });
+    require("../services/assistantService").alertAdmin("A campaign payment is waiting for your check (Admin > Assistant).");
     res.json({ payment: serializePayment(payment) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || "Failed to submit payment reference" });

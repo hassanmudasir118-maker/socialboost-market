@@ -26,6 +26,7 @@ const NAV_CONFIG = {
     { key: "earnings", label: "Earnings", icon: Wallet },
   ],
   ADMIN: [
+    { key: "assistant", label: "Assistant", icon: Zap },
     { key: "overview", label: "Overview", icon: LayoutGrid },
     { key: "users", label: "Users", icon: Users },
     { key: "campaigns", label: "Campaigns", icon: Megaphone },
@@ -40,7 +41,7 @@ const NAV_CONFIG = {
   ],
 };
 const ROLE_LABEL = { ADVERTISER: "Advertiser", CREATOR: "Creator", ADMIN: "Admin" };
-const DEFAULT_TAB = { ADVERTISER: "campaigns", CREATOR: "quicktasks", ADMIN: "overview" };
+const DEFAULT_TAB = { ADVERTISER: "campaigns", CREATOR: "quicktasks", ADMIN: "assistant" };
 
 function NotificationBell() {
   const [notifs, setNotifs] = useState([]);
