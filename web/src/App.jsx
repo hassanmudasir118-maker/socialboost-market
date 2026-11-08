@@ -117,7 +117,7 @@ export default function App() {
       {page !== "dashboard" && <Nav onGo={goTo} session={session} onLogout={handleLogout} theme={theme} onToggleTheme={toggleTheme} />}
       {page === "home" && <Homepage onGo={goTo} />}
       <Suspense fallback={<PageLoader />}>
-      {page === "help" && <HelpCenter onGo={goTo} />}}
+      {page === "help" && <HelpCenter onGo={goTo} />}
       {page === "login" && <AuthPage mode="login" onGo={goTo} onAuth={handleAuth} />}
       {page === "signup" && <AuthPage mode="signup" onGo={goTo} onAuth={handleAuth} presetRole={presetRole} />}
       {page === "forgot-password" && <ForgotPassword onGo={goTo} />}
